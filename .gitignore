@@ -14,3 +14,6 @@
 .cxx
 local.properties
 noir_spartan/target
+noir_spartan/jniLibs/
+app/src/main/java/com/example/zkp_android_spartan/uniffi/
+app/src/main/jniLibs/

@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 uniffi = { version = "0.31", features = [ "cli" ] }
+spartan-backend = { git = "ssh://git@github.com/eid-privacy/spartan-backend" }
 
 [build-dependencies]
 uniffi = { version = "0.31", features = [ "build" ] }
