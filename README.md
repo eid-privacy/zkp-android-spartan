@@ -43,10 +43,10 @@ Once the Rust crate exposes real functions, you can regenerate Kotlin bindings w
 
 ```bash
 cd noir_spartan
-cargo run --bin uniffi-bindgen generate \
-  --library target/debug/libnoir_spartan.so \
-  --language kotlin \
-  --out-dir ../app/src/main/java/com/example/zkp_android_spartan/
+cargo ndk -t arm64-v8a -t x86_64 -o ./jniLibs build --release
+cp -R ./jniLibs/ ../app/src/main/
+cargo build --release
+cargo run --bin uniffi-bindgen generate --library target/release/libnoir_spartan.so --language kotlin --out-dir ../app/src/main/java/com/example/zkp_android_spartan/
 ```
 
 Adjust the library path and output directory as needed.
