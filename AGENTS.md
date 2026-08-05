@@ -8,7 +8,7 @@
 - A Rust crate (`noir_spartan/`) that exposes ZKP utilities to Android via [UniFFI](https://mozilla.github.io/uniffi-rs/).
 - A vendored/included Spartan backend and Noir circuits under `app/src/main/assets/spartan-backend/`.
 
-The Rust side is functional (it can prove real Noir circuits), and the Android UI has been updated to a tabbed Compose screen that calls `generate_proof` for each circuit. The UniFFI Kotlin bindings and native `.so` libraries must still be generated from `noir_spartan` before the app can run.
+The Rust side is functional (it can prove real Noir circuits), and the Android UI is a tabbed Compose screen that calls `generate_proof` for each circuit. The UniFFI Kotlin bindings are already checked in under `app/src/main/java/com/example/zkp_android_spartan/uniffi/`, and the native `.so` libraries are produced by `cargo ndk` during the Android build.
 
 ## Repository Layout
 
@@ -20,7 +20,7 @@ zkp-android-spartan/
 ├── build.gradle.kts       # Root Gradle build file
 ├── settings.gradle.kts    # Gradle project settings
 ├── gradle.properties      # Gradle/Android configuration
-├── gradle/libs.versions.toml # Version catalog (AGP 9.0.1, Kotlin 2.0.21, Compose BOM 2024.09.00)
+├── gradle/libs.versions.toml # Version catalog (AGP 9.3.1, Kotlin 2.2.10, Compose BOM 2024.09.00)
 ├── app/                   # Android application module
 │   ├── build.gradle.kts   # App-level dependencies and build config
 │   ├── proguard-rules.pro
@@ -34,7 +34,7 @@ zkp-android-spartan/
 │       │   │   └── algebra-utils/        # Shared elliptic-curve helpers
 │       │   ├── java/com/example/zkp_android_spartan/
 │       │   │   ├── MainActivity.kt          # Jetpack Compose entry point (tabbed circuit UI)
-│       │   │   ├── AssetUtils.kt            # Copies circuit directories from assets to filesDir
+│       │   │   ├── AssetUtils.kt            # Copies circuit directories from assets to filesDir, with a circuit-specific helper that ensures target/*.gz artifacts are present
 │       │   │   └── ui/theme/                # Compose Material3 theme files
 │       │   └── res/                         # Android resources
 │       ├── test/                            # Unit tests
@@ -42,16 +42,18 @@ zkp-android-spartan/
 └── noir_spartan/          # Rust crate exposed to Android
     ├── Cargo.toml         # Rust package manifest (UniFFI 0.31, spartan-backend git dep)
     ├── Cargo.lock         # Resolved dependency graph
-    ├── build.rs           # UniFFI scaffolding generation
-    └── src/
-        ├── lib.rs         # Library entry point, re-exports generate_proof
-        └── spartan.rs     # UniFFI-exported generate_proof implementation
+    ├── uniffi.toml        # UniFFI binding configuration (Kotlin package / cdylib name)
+    ├── src/
+    │   ├── lib.rs         # Library entry point, re-exports generate_proof
+    │   └── spartan.rs     # UniFFI-exported generate_proof implementation
+    └── src/bin/
+        └── uniffi-bindgen.rs  # CLI binary for regenerating Kotlin bindings
 ```
 
 ## Technology Stack
 
-- **Android**: Gradle with Android Gradle Plugin 9.0.1, `compileSdk = 36` (minor API level 1), `minSdk = 24`, `targetSdk = 36`.
-- **Language**: Kotlin 2.0.21, Java 11 source/target compatibility.
+- **Android**: Gradle with Android Gradle Plugin 9.3.1, `compileSdk = 37`, `minSdk = 24`, `targetSdk = 36`.
+- **Language**: Kotlin 2.2.10, Java 11 source/target compatibility.
 - **UI**: Jetpack Compose with Material3, Compose BOM `2024.09.00`, Compose Foundation Pager, and Kotlin Coroutines.
 - **Native/Rust**: Rust crate (`noir_spartan`) using UniFFI proc-macro exports to generate bindings for Kotlin/Android.
 - **ZKP/Noir**: Depends on `spartan-backend` from the `eid-privacy/spartan-backend` repository, which uses a forked Noir compiler (`t256-v0.22-1` tag) and Spartan2.
@@ -68,7 +70,7 @@ zkp-android-spartan/
 
 - `cargo build` — Build the Rust crate.
 - `cargo test` — Run Rust unit tests.
-- `cargo run --bin uniffi-bindgen generate --library ./target/release/libnoir_spartan.so --language kotlin --out-dir ../app/src/main/java/com/example/zkp_android_spartan/` — Regenerate Kotlin bindings after API changes.
+- `cargo run --bin uniffi-bindgen generate --library ./target/release/libnoir_spartan.so --language kotlin --out-dir ../app/src/main/java/com/example/zkp_android_spartan/` — Regenerate Kotlin bindings after API changes. This writes the file to `app/src/main/java/com/example/zkp_android_spartan/uniffi/noir_spartan/noir_spartan.kt`.
 
 ### Spartan backend and circuits
 
@@ -93,8 +95,10 @@ See `app/src/main/assets/spartan-backend/preprocessing/README.md` for the tool-t
 ## Important Notes
 
 - The `noir_spartan` crate is no longer a stub: `src/spartan.rs` exports a `generate_proof(pwd: String) -> bool` function. It loads a Noir circuit directory and produces a Spartan2 proof via `spartan-backend`.
-- UniFFI bindings are generated from proc-macro attributes (`#[uniffi::export]`).
-- The Android app is now a tabbed Compose screen. It discovers the circuit directories under `assets/spartan-backend/circuits/`, copies the selected circuit to `filesDir/circuits/<name>/`, and calls `generate_proof` with that filesystem path.
+- UniFFI bindings are generated from proc-macro attributes (`#[uniffi::export]`). The Kotlin binding file is committed at `app/src/main/java/com/example/zkp_android_spartan/uniffi/noir_spartan/noir_spartan.kt`; regenerate it after API changes.
+- The Android app uses JNA (via `net.java.dev.jna:jna:5.19.1`) to load the native library.
+- `app/build.gradle.kts` configures `androidResources { noCompress += "gz" }` so that `.gz` witness files are stored as-is in the APK. Without this, AAPT compresses them and `AssetManager.open()` returns decompressed bytes, breaking the prover.
+- The Android app is a tabbed Compose screen. It discovers the circuit directories under `assets/spartan-backend/circuits/`, copies the selected circuit to `filesDir/circuits/<name>/`, and calls `generate_proof` with that filesystem path.
 - The vendored `spartan-backend` is a large Rust codebase that pulls in a forked Noir compiler/toolchain; initial builds can be slow.
 - Circuit target artifacts (`circuits/*/target/`) are intentionally versioned in this repository because the generated ACIR bytecode is part of the tracked backend test corpus.
 - For circuit compilation from source, use the `nargo-t256` build of the `eid-privacy/noir` fork at tag `t256-v0.22-1`.

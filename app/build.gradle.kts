@@ -35,6 +35,13 @@ android {
     buildFeatures {
         compose = true
     }
+
+    // Keep .gz witness files stored as-is in the APK. Without this, AAPT
+    // compresses them and AssetManager.open() transparently decompresses the
+    // gzip layer, so the copied file no longer has a valid gzip header.
+    androidResources {
+        noCompress += "gz"
+    }
 }
 
 dependencies {

@@ -114,7 +114,7 @@ fun CircuitTab(circuitName: String) {
                     val result = try {
                         val assetPath = "spartan-backend/circuits/$circuitName"
                         val circuitDir = File(context.filesDir, "circuits/$circuitName")
-                        copyAssetDirToFiles(context, assetPath, circuitDir)
+                        copyCircuitToFiles(context, assetPath, circuitDir)
 
                         val start = SystemClock.elapsedRealtime()
                         // `generate_proof` is provided by the UniFFI-generated Kotlin bindings.

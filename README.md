@@ -2,13 +2,13 @@
 
 An experimental Android project exploring zero-knowledge proof (ZKP) workflows using [Noir](https://noir-lang.org/) together with a [Spartan2](https://github.com/microsoft/Spartan)-style proof system. The goal is to provide a working template for running ZKP operations on Android, with the heavy lifting implemented in Rust and exposed to the Android app through [UniFFI](https://mozilla.github.io/uniffi-rs/).
 
-> **Status:** The `noir_spartan` Rust crate exposes a real `generate_proof` function backed by a full Spartan backend, and the repository includes a suite of passing Noir circuits. The Android app now provides a tabbed Jetpack Compose UI with a **Generate proof** button per circuit and reports success/failure with elapsed time. UniFFI Kotlin bindings and the native `.so` libraries still need to be generated from `noir_spartan` before the app can run.
+> **Status:** The `noir_spartan` Rust crate exposes a real `generate_proof` function backed by a full Spartan backend, and the repository includes a suite of passing Noir circuits. The Android app provides a tabbed Jetpack Compose UI with a **Generate proof** button per circuit and reports success/failure with elapsed time. The UniFFI Kotlin bindings are already committed under `app/src/main/java/com/example/zkp_android_spartan/uniffi/`; only the native `.so` libraries need to be built for the target Android architectures.
 
 ## What this project contains
 
 - **`app/`** — Android application module.
-  - Built with Gradle, the Android Gradle Plugin 9.0.1, Kotlin 2.0.21, and Jetpack Compose.
-  - Targets `compileSdk = 36`, `minSdk = 24`, `targetSdk = 36`.
+  - Built with Gradle, the Android Gradle Plugin 9.3.1, Kotlin 2.2.10, and Jetpack Compose.
+  - Targets `compileSdk = 37`, `minSdk = 24`, `targetSdk = 36`.
   - Entry point is `MainActivity.kt`, which renders a tabbed Compose UI: one tab per circuit in `assets/spartan-backend/circuits/`, each with a **Generate proof** button and a status read-out.
 
 - **`noir_spartan/`** — Rust crate that exposes ZKP utilities to Android.
@@ -69,7 +69,7 @@ Adjust target architectures, library path, and output directory as needed.
 
 ## Project roadmap / known limitations
 
-1. The Android UI is implemented, but the UniFFI bindings and native libraries must be built in an environment with Rust + the Android NDK before the app can call `generate_proof`.
+1. The Android UI is implemented and the UniFFI Kotlin bindings are checked in, but the native `.so` libraries must be built in an environment with Rust + the Android NDK before the app can call `generate_proof`.
 2. The `noir_spartan` crate currently only exports a single `generate_proof` function; richer APIs (returning proof bytes, verification, circuit selection) are not yet exposed.
 3. Noir compilation and Spartan proving are resource-intensive; performance tuning for mobile will be needed.
 4. Some circuits require off-circuit ECDSA preprocessing; run the tools in `app/src/main/assets/spartan-backend/preprocessing/` before proving them. Circuits that are missing preprocessed witnesses will report a failure in the app.

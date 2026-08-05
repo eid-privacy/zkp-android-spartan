@@ -2,6 +2,7 @@ package com.example.zkp_android_spartan
 
 import android.content.Context
 import java.io.File
+import java.io.FileNotFoundException
 import java.io.IOException
 
 /**
@@ -30,6 +31,67 @@ fun copyAssetDirToFiles(context: Context, assetPath: String, destDir: File) {
         destDir.mkdirs()
         for (child in children) {
             copyAssetDirToFiles(context, "$assetPath/$child", File(destDir, child))
+        }
+    }
+}
+
+/**
+ * Copies a circuit directory from assets to the local filesystem.
+ *
+ * In addition to the recursive copy performed by [copyAssetDirToFiles], this
+ * function explicitly ensures that the circuit artifacts under `target/` are
+ * present with the names expected by the Spartan backend. The Android build
+ * tools can strip the `.gz` extension from compressed assets (storing a witness
+ * as `target/<circuit>` instead of `target/<circuit>.gz`), so the recursive
+ * copy alone may leave the prover unable to find `target/<circuit>.gz`.
+ *
+ * @param context Android context, used to access the AssetManager.
+ * @param assetPath Path inside assets to the circuit directory,
+ *                  e.g. "spartan-backend/circuits/c0000_trivial".
+ * @param destDir Destination directory on the filesystem.
+ * @throws IOException if the asset cannot be read or the destination cannot be written.
+ */
+fun copyCircuitToFiles(context: Context, assetPath: String, destDir: File) {
+    copyAssetDirToFiles(context, assetPath, destDir)
+
+    val circuitName = destDir.name
+    val targetAssetPath = "$assetPath/target"
+    val targetDir = File(destDir, "target")
+
+    listOf(
+        "$circuitName.json" to File(targetDir, "$circuitName.json"),
+        "$circuitName.gz" to File(targetDir, "$circuitName.gz")
+    ).forEach { (fileName, fileDest) ->
+        if (fileDest.exists()) return@forEach
+
+        fileDest.parentFile?.mkdirs()
+
+        // The Android build tools may strip the `.gz` extension from compressed
+        // assets, storing the witness file as `target/<circuit>` instead of
+        // `target/<circuit>.gz`. Try the canonical name first, then the fallback.
+        val assetNames = if (fileName.endsWith(".gz")) {
+            listOf(fileName, fileName.removeSuffix(".gz"))
+        } else {
+            listOf(fileName)
+        }
+
+        var copied = false
+        for (assetName in assetNames) {
+            try {
+                context.assets.open("$targetAssetPath/$assetName").use { input ->
+                    fileDest.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                copied = true
+                break
+            } catch (_: FileNotFoundException) {
+                // Try the next candidate name.
+            }
+        }
+
+        if (!copied) {
+            throw FileNotFoundException("$targetAssetPath/$fileName")
         }
     }
 }
