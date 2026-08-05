@@ -1,0 +1,40 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.17.0/.schema/devbox.schema.json",
+  "packages": [
+    "rustup@latest",
+    "jdk17@latest",
+    "android-tools@latest",
+    "libiconv@latest",
+    "gcc@latest",
+    "pkg-config@latest",
+    "openssl@latest",
+    "cmake@latest"
+  ],
+  "env": {
+    "CARGO_NET_GIT_FETCH_WITH_CLI": "true"
+  },
+  "shell": {
+    "init_hook": [
+      "if [ \"$(uname)\" = \"Darwin\" ]; then export ANDROID_HOME=$HOME/Library/Android/sdk; else export ANDROID_HOME=$HOME/Android; fi",
+      "export ANDROID_SDK_ROOT=$ANDROID_HOME",
+      "export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))",
+      "export ANDROID_NDK_HOME=$(ls -d $ANDROID_HOME/ndk/* 2>/dev/null | sort -V | tail -1)",
+      "export PATH=\"$HOME/.cargo/bin:$PATH\"",
+      "export PKG_CONFIG_PATH=\"$DEVBOX_PACKAGES_DIR/lib/pkgconfig:$PKG_CONFIG_PATH\"",
+      "rustup default stable >/dev/null 2>&1 || rustup toolchain install stable"
+    ],
+    "scripts": {
+      "cargo":             ["cargo \"$@\""],
+      "rust_build":        ["cd noir_spartan && cargo build --release"],
+      "gen_bindings":      ["cd noir_spartan && cargo run --bin uniffi-bindgen generate --no-format --library ./target/release/libnoir_spartan.so --language kotlin --out-dir ../app/src/main/java/com/example/zkp_android_spartan/"],
+      "ndk_build":         ["cd noir_spartan && cargo ndk -t arm64-v8a -t x86_64 -o ../app/src/main/jniLibs build --release"],
+      "gradle":            ["./gradlew \"$@\""],
+      "build_apk":         ["./gradlew :app:assembleDebug"],
+      "install_apk":       ["$ANDROID_HOME/platform-tools/adb install -r app/build/outputs/apk/debug/app-debug.apk"],
+      "launch_app":        ["$ANDROID_HOME/platform-tools/adb shell am start -n com.example.zkp_android_spartan/.MainActivity"],
+      "ensure_avd":        ["bash scripts/ensure_avd.sh \"${1:-Pixel_9}\""],
+      "emulator":          ["bash scripts/ensure_avd.sh \"${1:-Pixel_9}\"", "$ANDROID_HOME/emulator/emulator -avd \"${1:-Pixel_9}\" &"],
+      "emulator-headless": ["bash scripts/ensure_avd.sh \"${1:-Pixel_9}\"", "$ANDROID_HOME/emulator/emulator -avd \"${1:-Pixel_9}\" -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect &"]
+    }
+  }
+}
