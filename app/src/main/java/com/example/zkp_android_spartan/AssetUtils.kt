@@ -4,6 +4,7 @@ import android.content.Context
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
+import java.util.zip.GZIPOutputStream
 
 /**
  * Recursively copies an Android asset directory (or file) to the local filesystem.
@@ -80,7 +81,18 @@ fun copyCircuitToFiles(context: Context, assetPath: String, destDir: File) {
             try {
                 context.assets.open("$targetAssetPath/$assetName").use { input ->
                     fileDest.outputStream().use { output ->
-                        input.copyTo(output)
+                        // AAPT does not merely strip the `.gz` extension: it also
+                        // gunzips the asset, so the extension-less fallback holds
+                        // the raw, decompressed witness. When we take that fallback
+                        // for a `.gz` target, re-gzip it so the file written as
+                        // `<circuit>.gz` is valid gzip that the Spartan prover can
+                        // decompress. The canonical `.gz` asset (if AAPT ever
+                        // leaves one) is copied through unchanged.
+                        if (fileName.endsWith(".gz") && !assetName.endsWith(".gz")) {
+                            GZIPOutputStream(output).use { gz -> input.copyTo(gz) }
+                        } else {
+                            input.copyTo(output)
+                        }
                     }
                 }
                 copied = true
