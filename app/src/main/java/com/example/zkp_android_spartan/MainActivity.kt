@@ -120,10 +120,10 @@ fun CircuitTab(circuitName: String) {
 
                         val start = SystemClock.elapsedRealtime()
                         // `generate_proof` is provided by the UniFFI-generated Kotlin bindings.
-                        val ok = generateProof(circuitDir.absolutePath)
+                        val proof = generateProof(circuitDir.absolutePath)
                         val elapsed = SystemClock.elapsedRealtime() - start
 
-                        if (ok) {
+                        if (proof.isNotEmpty()) {
                             val msg = "Proof generated successfully in ${elapsed}ms"
                             Log.i(TAG, "[$circuitName] $msg")
                             msg

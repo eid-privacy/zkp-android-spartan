@@ -66,7 +66,7 @@ zkp-android-spartan/
 - **Language**: Kotlin 2.2.10, Java 11 source/target compatibility.
 - **UI**: Jetpack Compose with Material3, Compose BOM `2024.09.00`, Compose Foundation Pager, and Kotlin Coroutines.
 - **Native/Rust**: Rust crate (`noir_spartan`) using `edition = "2024"` and UniFFI 0.31 proc-macro exports to generate bindings for Kotlin/Android.
-- **ZKP/Noir**: `noir_spartan` depends on `spartan-backend` from the `eid-privacy/spartan-backend` repository via an **SSH Git URL** (`ssh://git@github.com/eid-privacy/spartan-backend`). The vendored copy under `assets/spartan-backend/` is used for circuit assets and standalone backend runs, but it is **not** the dependency source for the `noir_spartan` crate.
+- **ZKP/Noir**: `noir_spartan` depends on `spartan-backend` from the `eid-privacy/spartan-backend` repository via an **SSH Git URL** (`ssh://git@github.com/eid-privacy/spartan-backend`). The vendored copy under `assets/spartan-backend/` is used for circuit assets and standalone backend runs, but it is **not** the dependency source for the `noir_spartan` crate. The exported `generate_proof(pwd: String) -> String` encodes the proof as base64 and returns it (or an empty `String` on failure).
 - The backend uses a forked Noir compiler (`t256-v0.22-1` tag) and Spartan2.
 
 ## Build Commands
@@ -161,8 +161,8 @@ Two host-specific build workarounds:
 
 ## Important Notes
 
-- The `noir_spartan` crate is no longer a stub: `src/spartan.rs` exports a `generate_proof(pwd: String) -> bool` function. It loads a Noir circuit directory and produces a Spartan2 proof via `spartan-backend`.
-- UniFFI bindings are generated from proc-macro attributes (`#[uniffi::export]`). The Kotlin binding file is written to `app/src/main/java/com/example/zkp_android_spartan/uniffi/noir_spartan/noir_spartan.kt`, but the `uniffi/` directory is listed in `.gitignore` and is not committed. Regenerate it after API changes.
+- The `noir_spartan` crate is no longer a stub: `src/spartan.rs` exports a `generate_proof(pwd: String) -> String` function. It loads a Noir circuit directory, produces a Spartan2 proof via `spartan-backend`, encodes the proof as base64, and returns it (or an empty `String` on failure).
+- UniFFI bindings are generated from proc-macro attributes (`#[uniffi::export]`) by inspecting the compiled `.so`. The Kotlin binding file is written to `app/src/main/java/com/example/zkp_android_spartan/uniffi/noir_spartan/noir_spartan.kt`, but the `uniffi/` directory is listed in `.gitignore` and is not committed. Regenerate it after API changes, and always rebuild `target/release/libnoir_spartan.so` first.
 - The Android app uses JNA (via `net.java.dev.jna:jna:5.19.1`) to load the native library.
 - `app/build.gradle.kts` configures `androidResources { noCompress += "gz" }` so that `.gz` witness files are stored as-is in the APK. Without this, AAPT compresses them and `AssetManager.open()` returns decompressed bytes, breaking the prover.
 - `AssetUtils.kt` includes additional fallback logic: if the Android build tools strip the `.gz` extension from a compressed witness asset, the helper re-gzips the decompressed stream when copying it back to `target/<circuit>.gz`.

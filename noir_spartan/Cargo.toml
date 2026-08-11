@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 uniffi = { version = "0.31", features = [ "cli" ] }
 spartan-backend = { git = "ssh://git@github.com/eid-privacy/spartan-backend" }
+# https://github.com/microsoft/vega-prover/blob/c0ee259053cd12eaf43ed71b5cde375452b3ee4d/Cargo.toml#L30
 
 [build-dependencies]
 uniffi = { version = "0.31", features = [ "build" ] }
