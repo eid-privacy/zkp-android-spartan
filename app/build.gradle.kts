@@ -6,9 +6,7 @@ plugins {
 android {
     namespace = "com.example.zkp_android_spartan"
     compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
+        version = release(37)
     }
 
     defaultConfig {
@@ -37,6 +35,13 @@ android {
     buildFeatures {
         compose = true
     }
+
+    // Keep .gz witness files stored as-is in the APK. Without this, AAPT
+    // compresses them and AssetManager.open() transparently decompresses the
+    // gzip layer, so the copied file no longer has a valid gzip header.
+    androidResources {
+        noCompress += "gz"
+    }
 }
 
 dependencies {
@@ -48,6 +53,13 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.foundation)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.jna) {
+        artifact {
+            type = "aar"
+        }
+    }
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

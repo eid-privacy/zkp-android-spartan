@@ -2,7 +2,13 @@
 
 ## Project Purpose
 
-`zkp-android-spartan` is an experimental Android application template that aims to demonstrate or host zero-knowledge proof (ZKP) workflows built with [Spartan](https://github.com/microsoft/Spartan)-style proof systems through the [Noir](https://noir-lang.org/) language/toolchain. At this early stage the project is a standard Android app skeleton with an adjacent Rust crate (`noir_spartan`) intended to expose ZKP/Noir utilities to Android via [UniFFI](https://mozilla.github.io/uniffi-rs/).
+`zkp-android-spartan` is an experimental Android application template that demonstrates zero-knowledge proof (ZKP) workflows built with a [Spartan2](https://github.com/microsoft/Spartan)-style proof system through the [Noir](https://noir-lang.org/) language/toolchain. The project consists of:
+
+- A standard Android app skeleton (`app/`).
+- A Rust crate (`noir_spartan/`) that exposes ZKP utilities to Android via [UniFFI](https://mozilla.github.io/uniffi-rs/).
+- A vendored/included Spartan backend and Noir circuits under `app/src/main/assets/spartan-backend/` (managed as a Git submodule).
+
+The Rust side is functional (it can prove real Noir circuits), and the Android UI is a tabbed Compose screen that calls `generate_proof` for each circuit directory it discovers. The UniFFI Kotlin bindings and compiled `.so` libraries are **generated artifacts**; they are present in this workspace but are listed in `.gitignore` and are not committed to the repository.
 
 ## Repository Layout
 
@@ -10,46 +16,108 @@
 zkp-android-spartan/
 ├── AGENTS.md              # This file
 ├── README.md              # Human-oriented project overview
+├── LICENSE                # Mozilla Public License 2.0
+├── .gitignore             # Excludes generated Rust targets, jniLibs, UniFFI bindings, local.properties
+├── .gitmodules            # Defines the spartan-backend Git submodule
 ├── build.gradle.kts       # Root Gradle build file
 ├── settings.gradle.kts    # Gradle project settings
 ├── gradle.properties      # Gradle/Android configuration
-├── gradle/libs.versions.toml # Version catalog (AGP 9.0.1, Kotlin 2.0.21, Compose BOM 2024.09.00)
+├── gradle/
+│   ├── libs.versions.toml # Version catalog (AGP 9.3.1, Kotlin 2.2.10, Compose BOM 2024.09.00)
+│   ├── gradle-daemon-jvm.properties # Daemon JVM toolchain configuration (version 21)
+│   └── wrapper/           # Gradle 9.5.0 wrapper
 ├── app/                   # Android application module
 │   ├── build.gradle.kts   # App-level dependencies and build config
 │   ├── proguard-rules.pro
 │   └── src/
 │       ├── main/
 │       │   ├── AndroidManifest.xml
+│       │   ├── assets/spartan-backend/   # Git submodule: vendored Spartan backend + Noir circuits
+│       │   │   ├── spartan-backend/      # Rust crate: R1CS synthesis, proving, verification
+│       │   │   ├── circuits/             # Noir circuits (c0000_trivial, c0006_sha256, ...)
+│       │   │   ├── preprocessing/        # Off-circuit ECDSA witness precomputations
+│       │   │   ├── algebra-utils/        # Shared elliptic-curve helpers
+│       │   │   └── scripts/              # Helper scripts
 │       │   ├── java/com/example/zkp_android_spartan/
-│       │   │   ├── MainActivity.kt          # Jetpack Compose entry point
+│       │   │   ├── MainActivity.kt          # Jetpack Compose entry point (tabbed circuit UI)
+│       │   │   ├── AssetUtils.kt            # Copies circuit directories from assets to filesDir
+│       │   │   ├── uniffi/noir_spartan/noir_spartan.kt # Generated UniFFI Kotlin bindings (gitignored)
 │       │   │   └── ui/theme/                # Compose Material3 theme files
-│       │   └── res/                         # Android resources (not detailed here)
+│       │   ├── jniLibs/                     # Pre-built native libraries (gitignored)
+│       │   │   ├── arm64-v8a/libnoir_spartan.so
+│       │   │   └── x86_64/libnoir_spartan.so
+│       │   └── res/                         # Android resources
 │       ├── test/                            # Unit tests
 │       └── androidTest/                     # Instrumented tests
-└── noir_spartan/          # Rust crate intended for ZKP/Noir integration
-    ├── Cargo.toml         # Rust package manifest (depends on UniFFI 0.31 and noir v1.0.0-beta.22)
-    ├── build.rs           # UniFFI scaffolding generation
-    └── src/
-        └── lib.rs         # Rust library entry point (currently contains a stub `add` function)
+└── noir_spartan/          # Rust crate exposed to Android
+    ├── Cargo.toml         # Rust package manifest (UniFFI 0.31, spartan-backend git dep over SSH)
+    ├── Cargo.lock         # Resolved dependency graph
+    ├── uniffi.toml        # UniFFI binding configuration (Kotlin package / cdylib name)
+    ├── src/
+    │   ├── lib.rs         # Library entry point, re-exports generate_proof
+    │   └── spartan.rs     # UniFFI-exported generate_proof implementation
+    └── src/bin/
+        └── uniffi-bindgen.rs  # CLI binary for regenerating Kotlin bindings
 ```
 
 ## Technology Stack
 
-- **Android**: Gradle with Android Gradle Plugin 9.0.1, `compileSdk = 36` (minor API level 1), `minSdk = 24`, `targetSdk = 36`.
-- **Language**: Kotlin 2.0.21, Java 11 source/target compatibility.
-- **UI**: Jetpack Compose with Material3, Compose BOM `2024.09.00`.
-- **Native/Rust**: Rust crate (`noir_spartan`) using `uniffi` to generate bindings for Kotlin/Android.
-- **ZKP/Noir**: Depends on the Noir compiler/toolchain (`noir` crate from `v1.0.0-beta.22` branch) and is intended to interface with Spartan-style proving.
+- **Android**: Gradle 9.5.0 with Android Gradle Plugin 9.3.1, `compileSdk = 37`, `minSdk = 24`, `targetSdk = 36`.
+- **Language**: Kotlin 2.2.10, Java 11 source/target compatibility.
+- **UI**: Jetpack Compose with Material3, Compose BOM `2024.09.00`, Compose Foundation Pager, and Kotlin Coroutines.
+- **Native/Rust**: Rust crate (`noir_spartan`) using `edition = "2024"` and UniFFI 0.31 proc-macro exports to generate bindings for Kotlin/Android.
+- **ZKP/Noir**: `noir_spartan` depends on `spartan-backend` from the `eid-privacy/spartan-backend` repository via an **SSH Git URL** (`ssh://git@github.com/eid-privacy/spartan-backend`). The vendored copy under `assets/spartan-backend/` is used for circuit assets and standalone backend runs, but it is **not** the dependency source for the `noir_spartan` crate.
+- The backend uses a forked Noir compiler (`t256-v0.22-1` tag) and Spartan2.
 
 ## Build Commands
+
+### Android
 
 - `./gradlew build` — Build the Android app.
 - `./gradlew test` — Run unit tests.
 - `./gradlew connectedAndroidTest` — Run instrumented tests (requires a connected device or emulator).
-- In `noir_spartan/`:
-  - `cargo build` — Build the Rust crate.
-  - `cargo test` — Run Rust unit tests.
-  - `cargo run --bin uniffi-bindgen generate --library target/debug/libnoir_spartan.so --language kotlin --out-dir ../app/src/main/java/com/example/zkp_android_spartan/` (typical UniFFI binding flow; adjust paths/library name as needed).
+
+> **Note:** The Gradle build does **not** compile the Rust code. It expects the native libraries to already exist under `app/src/main/jniLibs/`. See the `cargo ndk` step below.
+
+### `noir_spartan` Rust crate
+
+Requires a Rust toolchain that supports `edition = "2024"`. The first build downloads and compiles the `spartan-backend` dependency, which can take a while.
+
+- `cargo build` — Build the Rust crate.
+- `cargo test` — Run Rust unit tests.
+- `cargo run --bin uniffi-bindgen generate --library ./target/release/libnoir_spartan.so --language kotlin --out-dir ../app/src/main/java/com/example/zkp_android_spartan/` — Regenerate Kotlin bindings after API changes. This writes the file to `app/src/main/java/com/example/zkp_android_spartan/uniffi/noir_spartan/noir_spartan.kt`.
+
+### Android native libraries
+
+Build the `.so` files for the target Android architectures and copy them into the app module:
+
+```bash
+cd noir_spartan
+cargo ndk -t arm64-v8a -t x86_64 -o ./jniLibs build --release
+cp -R ./jniLibs/ ../app/src/main/
+```
+
+The app currently ships `arm64-v8a` and `x86_64` binaries. Adjust targets as needed.
+
+### Spartan backend and circuits
+
+From `app/src/main/assets/spartan-backend/spartan-backend/`:
+
+- `cargo run --release c0000_trivial` — Prove and verify a specific circuit.
+- `cargo run --release` — Prove and verify the default hardcoded subset of circuits (`c0000`–`c0100`).
+
+Set `RUST_LOG=DEBUG` (or `INFO`, `TRACE`) for detailed logs.
+
+### Preprocessing tools
+
+Some circuits need off-circuit ECDSA witnesses. Each tool is a standalone Cargo crate:
+
+```bash
+cd app/src/main/assets/spartan-backend/preprocessing/<tool>
+cargo run --release
+```
+
+See `app/src/main/assets/spartan-backend/preprocessing/README.md` for the tool-to-circuit mapping.
 
 ## Devbox and Emulator Workflow
 
@@ -93,9 +161,21 @@ Two host-specific build workarounds:
 
 ## Important Notes
 
-- The `noir_spartan` crate is currently a stub: it exposes no useful functions in `noir_spartan.udl` and `lib.rs` only contains a placeholder `add` function. Real ZKP/Noir integration is not yet implemented.
-- The Noir dependency points at a large external Git repository; expect long initial build times and ensure the Rust toolchain is installed.
-- Android app code is generated from Android Studio's Compose template and does not yet call into the Rust crate.
+- The `noir_spartan` crate is no longer a stub: `src/spartan.rs` exports a `generate_proof(pwd: String) -> bool` function. It loads a Noir circuit directory and produces a Spartan2 proof via `spartan-backend`.
+- UniFFI bindings are generated from proc-macro attributes (`#[uniffi::export]`). The Kotlin binding file is written to `app/src/main/java/com/example/zkp_android_spartan/uniffi/noir_spartan/noir_spartan.kt`, but the `uniffi/` directory is listed in `.gitignore` and is not committed. Regenerate it after API changes.
+- The Android app uses JNA (via `net.java.dev.jna:jna:5.19.1`) to load the native library.
+- `app/build.gradle.kts` configures `androidResources { noCompress += "gz" }` so that `.gz` witness files are stored as-is in the APK. Without this, AAPT compresses them and `AssetManager.open()` returns decompressed bytes, breaking the prover.
+- `AssetUtils.kt` includes additional fallback logic: if the Android build tools strip the `.gz` extension from a compressed witness asset, the helper re-gzips the decompressed stream when copying it back to `target/<circuit>.gz`.
+- The Android app is a tabbed Compose screen. It discovers every circuit directory under `assets/spartan-backend/circuits/` and creates one tab per directory. Not every directory is a standalone provable circuit:
+  - `c9000_benchmark/` contains a benchmark circuit but no `target/` artifacts or `Prover.toml`.
+  - `eid/` is a shared Noir library used by `c0200_swiyu_jwt`, not a standalone circuit.
+  Pressing **Generate proof** on these tabs will fail.
+- The vendored `spartan-backend` is a large Rust codebase that pulls in a forked Noir compiler/toolchain; initial builds can be slow.
+- Circuit target artifacts (`circuits/*/target/`) are intentionally versioned in the submodule because the generated ACIR bytecode is part of the tracked backend test corpus.
+- For circuit compilation from source, use the `nargo-t256` build of the `eid-privacy/noir` fork at tag `t256-v0.22-1`.
+- The `noir_spartan` crate depends on `spartan-backend` via an SSH Git URL (`ssh://git@github.com/eid-privacy/spartan-backend`), not via the local submodule path. Building `noir_spartan` therefore requires SSH access to the `eid-privacy/spartan-backend` repository.
+- The `spartan-backend` submodule is currently checked out at commit `71f8d0d9fb1d6e0b408de7abd32035ae5124ec10`, while `noir_spartan/Cargo.lock` resolves `spartan-backend` to commit `2b4f34db7703ce8e1e83bebedb44117ca57d42c6`. These commits differ, so the vendored code under `assets/spartan-backend/` is not guaranteed to match the code linked into the Android library.
+- Keep `generate_proof(pwd: String) -> bool` unchanged unless you intentionally want to change the FFI contract; richer error reporting was intentionally left out to preserve the existing signature. The Android layer logs full exceptions and relies on the Rust-side `eprintln!` for failure details.
 
 ## License
 

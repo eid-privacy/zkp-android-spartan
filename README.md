@@ -1,35 +1,50 @@
 # zkp-android-spartan
 
-An experimental Android project exploring zero-knowledge proof (ZKP) workflows using [Noir](https://noir-lang.org/) together with a [Spartan](https://github.com/microsoft/Spartan)-style proof system. The goal is to provide a working template for running ZKP operations on Android, with the heavy lifting implemented in Rust and exposed to the Android app through [UniFFI](https://mozilla.github.io/uniffi-rs/).
+An experimental Android project exploring zero-knowledge proof (ZKP) workflows using [Noir](https://noir-lang.org/) together with a [Spartan2](https://github.com/microsoft/Spartan)-style proof system. The goal is to provide a working template for running ZKP operations on Android, with the heavy lifting implemented in Rust and exposed to the Android app through [UniFFI](https://mozilla.github.io/uniffi-rs/).
 
-> **Status: early skeleton.** The Android app is currently a standard Jetpack Compose starter, and the `noir_spartan` Rust crate is a stub that does not yet expose any real proving functionality.
+> **Status:** The `noir_spartan` Rust crate exposes a real `generate_proof` function backed by a full Spartan backend, and the repository includes a suite of passing Noir circuits. The Android app provides a tabbed Jetpack Compose UI with a **Generate proof** button per circuit and reports success/failure with elapsed time. The UniFFI Kotlin bindings and native `.so` libraries are **generated artifacts**; they happen to be present in this workspace, but they are listed in `.gitignore` and are not committed. A fresh clone must rebuild them before the app can run.
 
 ## What this project contains
 
 - **`app/`** — Android application module.
-  - Built with Gradle, the Android Gradle Plugin 9.0.1, Kotlin 2.0.21, and Jetpack Compose.
-  - Targets `compileSdk = 36`, `minSdk = 24`, `targetSdk = 36`.
-  - Entry point is `MainActivity.kt`, which renders a simple Compose UI.
+  - Built with Gradle 9.5.0, the Android Gradle Plugin 9.3.1, Kotlin 2.2.10, and Jetpack Compose.
+  - Targets `compileSdk = 37`, `minSdk = 24`, `targetSdk = 36`.
+  - Entry point is `MainActivity.kt`, which renders a tabbed Compose UI: one tab per directory in `assets/spartan-backend/circuits/`, each with a **Generate proof** button and a status read-out.
+  - `AssetUtils.kt` copies circuit directories from assets to `filesDir/circuits/` and includes a fallback that re-gzips witness files if the Android build tools strip or decompress the `.gz` extension.
 
-- **`noir_spartan/`** — Rust crate intended for ZKP/Noir logic.
-  - Uses UniFFI 0.31 to generate Kotlin bindings for Android.
-  - Depends on the Noir compiler/toolchain from the `v1.0.0-beta.22` branch.
-  - Currently contains only a placeholder `add` function and an empty interface definition.
+- **`noir_spartan/`** — Rust crate that exposes ZKP utilities to Android.
+  - Uses UniFFI 0.31 (proc-macro exports) to generate Kotlin bindings.
+  - Uses Rust `edition = "2024"`.
+  - Exports `generate_proof(pwd: String) -> bool`, which loads a Noir circuit directory and produces a Spartan2 proof via `spartan-backend`.
+  - Depends on `spartan-backend` from the [`eid-privacy/spartan-backend`](https://github.com/eid-privacy/spartan-backend) repository via an **SSH Git URL** (`ssh://git@github.com/eid-privacy/spartan-backend`).
+
+- **`app/src/main/assets/spartan-backend/`** — Git submodule containing the vendored Spartan backend and Noir circuits.
+  - `spartan-backend/` — Rust crate that reads Noir `ProgramArtifact`s, synthesizes R1CS constraints, and proves/verifies with Spartan2.
+  - `circuits/` — Incrementally complex Noir circuits used to exercise the backend (e.g. `c0000_trivial`, `c0006_sha256`, `c0102_signature_vanilla_equation`, `c0200_swiyu_jwt`).
+  - `circuits/c9000_benchmark/` — Benchmark circuit without pre-built `target/` artifacts.
+  - `circuits/eid/` — Shared Noir library used by `c0200_swiyu_jwt`, not a standalone circuit.
+  - `preprocessing/` — Standalone Cargo tools that precompute ECDSA-related witnesses off-circuit and inject them into circuit `Prover.toml` files.
+  - `algebra-utils/` — Shared elliptic-curve helpers used by the backend and preprocessing tools.
 
 ## Build instructions
 
-### Android app
+### Prerequisites
 
-Requires a working Android SDK and JDK 17+.
+- Android SDK and JDK 17+.
+- Rust toolchain supporting `edition = "2024"`.
+- [`cargo-ndk`](https://github.com/bbqsrc/cargo-ndk) for cross-compiling Android native libraries.
+- SSH access to `git@github.com:eid-privacy/spartan-backend` so that `noir_spartan/Cargo.toml` can fetch its git dependency.
+
+### Android app
 
 ```bash
 ./gradlew build
 ./gradlew test
 ```
 
-### Rust crate
+The Gradle build expects the native libraries to already exist under `app/src/main/jniLibs/`. It does not invoke `cargo ndk` automatically.
 
-Requires a Rust toolchain (and patience — the first build compiles the Noir dependency).
+### Rust crate
 
 ```bash
 cd noir_spartan
@@ -37,25 +52,40 @@ cargo build
 cargo test
 ```
 
-### Generating UniFFI bindings
+### Android native libraries and UniFFI bindings
 
-Once the Rust crate exposes real functions, you can regenerate Kotlin bindings with:
+Build the Rust crate for Android and copy the `.so` files into the app module, then regenerate the Kotlin bindings:
 
 ```bash
 cd noir_spartan
 cargo ndk -t arm64-v8a -t x86_64 -o ./jniLibs build --release
 cp -R ./jniLibs/ ../app/src/main/
-cargo build --release
-cargo run --bin uniffi-bindgen generate --library target/release/libnoir_spartan.so --language kotlin --out-dir ../app/src/main/java/com/example/zkp_android_spartan/
+cargo run --bin uniffi-bindgen generate --library ./target/release/libnoir_spartan.so --language kotlin --out-dir ../app/src/main/java/com/example/zkp_android_spartan/
 ```
 
-Adjust the library path and output directory as needed.
+Adjust target architectures, library path, and output directory as needed.
+
+### Spartan backend and circuits (inside assets submodule)
+
+The backend can be built and run standalone to prove/verify any circuit in `app/src/main/assets/spartan-backend/circuits/`:
+
+```bash
+cd app/src/main/assets/spartan-backend/spartan-backend
+cargo run --release c0000_trivial
+```
+
+Running without a circuit name executes only the default hardcoded subset (`c0000`–`c0100`). To run circuits such as `c0006_sha256`, `c0101_signature_pok_zkattest_style`, `c0102_signature_vanilla_equation`, or `c0200_swiyu_jwt`, pass the circuit name explicitly.
+
+See `app/src/main/assets/spartan-backend/README.md` for full details on compiling circuits with the `nargo-t256` fork and running benchmarks.
 
 ## Project roadmap / known limitations
 
-1. `noir_spartan/src/lib.rs` contains only a stub `add` function; real ZKP proving/verification code is not implemented.
-2. The Android app does not currently load or call the Rust library.
-3. Noir compilation and Spartan proving can be resource-intensive; performance tuning for mobile will be needed.
+1. The UniFFI Kotlin bindings and native `.so` libraries are generated artifacts. They are present in this workspace but are not committed; a fresh clone must run the `cargo ndk` and `uniffi-bindgen` steps above.
+2. The `noir_spartan` crate currently only exports a single `generate_proof` function; richer APIs (returning proof bytes, verification, circuit selection) are not yet exposed.
+3. `noir_spartan` depends on `spartan-backend` via an SSH Git URL, while the circuit assets live in a Git submodule. The submodule is currently at commit `71f8d0d9...`, but `noir_spartan/Cargo.lock` resolves `spartan-backend` to commit `2b4f34db...`; these may not match.
+4. Noir compilation and Spartan proving are resource-intensive; performance tuning for mobile will be needed.
+5. Some circuits require off-circuit ECDSA preprocessing; run the tools in `app/src/main/assets/spartan-backend/preprocessing/` before proving them. Circuits that are missing preprocessed witnesses will report a failure in the app.
+6. The Android UI discovers every directory under `assets/spartan-backend/circuits/`, including `c9000_benchmark/` (no `target/` artifacts) and `eid/` (a shared library, not a circuit). Pressing **Generate proof** on these tabs will fail.
 
 ## License
 
