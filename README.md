@@ -48,22 +48,31 @@ The Gradle build expects the native libraries to already exist under `app/src/ma
 
 ```bash
 cd noir_spartan
-cargo build
+cargo build --release
 cargo test
 ```
 
+> **Note:** The UniFFI binding generator reads the exported API from the compiled library, so you must build the release `.so` (`target/release/libnoir_spartan.so`) before regenerating Kotlin bindings.
+
 ### Android native libraries and UniFFI bindings
 
-Build the Rust crate for Android and copy the `.so` files into the app module, then regenerate the Kotlin bindings:
+After changing the Rust API, rebuild the host library, regenerate the Kotlin bindings from it, then build the Android `.so` files and copy them into the app module:
 
 ```bash
 cd noir_spartan
+
+# 1. Rebuild the host release library that uniffi-bindgen inspects
+cargo build --release
+
+# 2. Regenerate Kotlin bindings from the freshly built .so
+cargo run --bin uniffi-bindgen generate --library ./target/release/libnoir_spartan.so --language kotlin --out-dir ../app/src/main/java/com/example/zkp_android_spartan/
+
+# 3. Build Android native libraries and copy them into the app module
 cargo ndk -t arm64-v8a -t x86_64 -o ./jniLibs build --release
 cp -R ./jniLibs/ ../app/src/main/
-cargo run --bin uniffi-bindgen generate --library ./target/release/libnoir_spartan.so --language kotlin --out-dir ../app/src/main/java/com/example/zkp_android_spartan/
 ```
 
-Adjust target architectures, library path, and output directory as needed.
+Adjust target architectures, library path, and output directory as needed. The order matters: UniFFI emits bindings from the `.so` on disk, and the Android app loads the `.so` from `jniLibs`, so both must be rebuilt after any Rust API change.
 
 ### Spartan backend and circuits (inside assets submodule)
 

@@ -83,13 +83,13 @@ zkp-android-spartan/
 
 Requires a Rust toolchain that supports `edition = "2024"`. The first build downloads and compiles the `spartan-backend` dependency, which can take a while.
 
-- `cargo build` — Build the Rust crate.
+- `cargo build --release` — Build the Rust crate. The release `.so` is also the source of truth for UniFFI binding generation.
 - `cargo test` — Run Rust unit tests.
-- `cargo run --bin uniffi-bindgen generate --library ./target/release/libnoir_spartan.so --language kotlin --out-dir ../app/src/main/java/com/example/zkp_android_spartan/` — Regenerate Kotlin bindings after API changes. This writes the file to `app/src/main/java/com/example/zkp_android_spartan/uniffi/noir_spartan/noir_spartan.kt`.
+- `cargo run --bin uniffi-bindgen generate --library ./target/release/libnoir_spartan.so --language kotlin --out-dir ../app/src/main/java/com/example/zkp_android_spartan/` — Regenerate Kotlin bindings after API changes. This writes the file to `app/src/main/java/com/example/zkp_android_spartan/uniffi/noir_spartan/noir_spartan.kt`. **This command inspects the compiled `target/release/libnoir_spartan.so`, so run `cargo build --release` first.**
 
 ### Android native libraries
 
-Build the `.so` files for the target Android architectures and copy them into the app module:
+After any Rust API change, rebuild the `.so` files for the target Android architectures and copy them into the app module:
 
 ```bash
 cd noir_spartan
@@ -97,7 +97,7 @@ cargo ndk -t arm64-v8a -t x86_64 -o ./jniLibs build --release
 cp -R ./jniLibs/ ../app/src/main/
 ```
 
-The app currently ships `arm64-v8a` and `x86_64` binaries. Adjust targets as needed.
+The app currently ships `arm64-v8a` and `x86_64` binaries. Adjust targets as needed. Because UniFFI embeds a per-function checksum in both the generated Kotlin and the loaded native library, the Kotlin bindings and `jniLibs/.so` must always come from the same build.
 
 ### Spartan backend and circuits
 
@@ -175,7 +175,7 @@ Two host-specific build workarounds:
 - For circuit compilation from source, use the `nargo-t256` build of the `eid-privacy/noir` fork at tag `t256-v0.22-1`.
 - The `noir_spartan` crate depends on `spartan-backend` via an SSH Git URL (`ssh://git@github.com/eid-privacy/spartan-backend`), not via the local submodule path. Building `noir_spartan` therefore requires SSH access to the `eid-privacy/spartan-backend` repository.
 - The `spartan-backend` submodule is currently checked out at commit `71f8d0d9fb1d6e0b408de7abd32035ae5124ec10`, while `noir_spartan/Cargo.lock` resolves `spartan-backend` to commit `2b4f34db7703ce8e1e83bebedb44117ca57d42c6`. These commits differ, so the vendored code under `assets/spartan-backend/` is not guaranteed to match the code linked into the Android library.
-- Keep `generate_proof(pwd: String) -> bool` unchanged unless you intentionally want to change the FFI contract; richer error reporting was intentionally left out to preserve the existing signature. The Android layer logs full exceptions and relies on the Rust-side `eprintln!` for failure details.
+- If you change the `generate_proof` signature or any other `#[uniffi::export]` API, remember to (1) rebuild `target/release/libnoir_spartan.so`, (2) regenerate the Kotlin bindings, and (3) rebuild the Android `jniLibs/.so` files. The Android Kotlin layer must then be updated to match the new signature (for example, `Vec<u8>` becomes `kotlin.ByteArray`).
 
 ## License
 
