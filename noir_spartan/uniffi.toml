@@ -1,3 +1,2 @@
 [bindings.kotlin]
-package_name = "uniffi.noir_spartan"
 cdylib_name = "noir_spartan"
