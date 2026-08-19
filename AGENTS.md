@@ -8,7 +8,7 @@
 - A Rust crate (`noir_spartan/`) that exposes ZKP utilities to Android via [UniFFI](https://mozilla.github.io/uniffi-rs/).
 - A vendored/included Spartan backend and Noir circuits under `app/src/main/assets/spartan-backend/` (managed as a Git submodule).
 
-The Rust side is functional (it can prove and verify real Noir circuits), and the Android UI is a tabbed Compose screen with **Generate proof** and **Verify proof** buttons for each circuit directory it discovers. The UniFFI Kotlin bindings and compiled `.so` libraries are **generated artifacts**; they are present in this workspace but are listed in `.gitignore` and are not committed to the repository.
+The Rust side is functional (it can prove and verify real Noir circuits), and the Android UI is a tabbed Compose screen with **Generate proof** and **Verify proof** buttons for each circuit directory it discovers. The UniFFI Kotlin bindings and compiled `.so` libraries are **generated artifacts**.
 
 ## Repository Layout
 
