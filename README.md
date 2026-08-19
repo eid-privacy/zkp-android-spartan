@@ -16,6 +16,7 @@ An experimental Android project exploring zero-knowledge proof (ZKP) workflows u
   - Uses UniFFI 0.31 (proc-macro exports) to generate Kotlin bindings.
   - Uses Rust `edition = "2024"`.
   - Exports `generate_proof(pwd: String) -> String`, which loads a Noir circuit directory, produces a Spartan2 proof via `spartan-backend`, and returns the base64-encoded proof (or an empty `String` on failure).
+  - Exports `verify(pwd: String, proof: String) -> bool`, which loads the same Noir circuit directory and verifies a base64-encoded proof, returning `true` on success and `false` on failure.
   - Depends on `spartan-backend` from the [`eid-privacy/spartan-backend`](https://github.com/eid-privacy/spartan-backend) repository via an **SSH Git URL** (`ssh://git@github.com/eid-privacy/spartan-backend`).
 
 - **`app/src/main/assets/spartan-backend/`** — Git submodule containing the vendored Spartan backend and Noir circuits.
@@ -90,7 +91,7 @@ See `app/src/main/assets/spartan-backend/README.md` for full details on compilin
 ## Project roadmap / known limitations
 
 1. The UniFFI Kotlin bindings and native `.so` libraries are generated artifacts. They are present in this workspace but are not committed; a fresh clone must run the `cargo ndk` and `uniffi-bindgen` steps above.
-2. The `noir_spartan` crate currently only exports a single `generate_proof` function; richer APIs (verification, circuit selection) are not yet exposed.
+2. The `noir_spartan` crate exports `generate_proof` and `verify`; richer APIs (circuit selection, batch operations) are not yet exposed.
 3. `noir_spartan` depends on `spartan-backend` via an SSH Git URL, while the circuit assets live in a Git submodule. The submodule is currently at commit `71f8d0d9...`, but `noir_spartan/Cargo.lock` resolves `spartan-backend` to commit `2b4f34db...`; these may not match.
 4. Noir compilation and Spartan proving are resource-intensive; performance tuning for mobile will be needed.
 5. Some circuits require off-circuit ECDSA preprocessing; run the tools in `app/src/main/assets/spartan-backend/preprocessing/` before proving them. Circuits that are missing preprocessed witnesses will report a failure in the app.
