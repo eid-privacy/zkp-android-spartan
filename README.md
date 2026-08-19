@@ -2,14 +2,14 @@
 
 An experimental Android project exploring zero-knowledge proof (ZKP) workflows using [Noir](https://noir-lang.org/) together with a [Spartan2](https://github.com/microsoft/Spartan)-style proof system. The goal is to provide a working template for running ZKP operations on Android, with the heavy lifting implemented in Rust and exposed to the Android app through [UniFFI](https://mozilla.github.io/uniffi-rs/).
 
-> **Status:** The `noir_spartan` Rust crate exposes a real `generate_proof` function backed by a full Spartan backend, and the repository includes a suite of passing Noir circuits. The Android app provides a tabbed Jetpack Compose UI with a **Generate proof** button per circuit and reports success/failure with elapsed time. The UniFFI Kotlin bindings and native `.so` libraries are **generated artifacts**; they happen to be present in this workspace, but they are listed in `.gitignore` and are not committed. A fresh clone must rebuild them before the app can run.
+> **Status:** The `noir_spartan` Rust crate exposes real `generate_proof` and `verify` functions backed by a full Spartan backend, and the repository includes a suite of passing Noir circuits. The Android app provides a tabbed Jetpack Compose UI with **Generate proof** and **Verify proof** buttons per circuit and reports success/failure with elapsed time. The UniFFI Kotlin bindings and native `.so` libraries are **generated artifacts**; they happen to be present in this workspace, but they are listed in `.gitignore` and are not committed. A fresh clone must rebuild them before the app can run.
 
 ## What this project contains
 
 - **`app/`** — Android application module.
   - Built with Gradle 9.5.0, the Android Gradle Plugin 9.3.1, Kotlin 2.2.10, and Jetpack Compose.
   - Targets `compileSdk = 37`, `minSdk = 24`, `targetSdk = 36`.
-  - Entry point is `MainActivity.kt`, which renders a tabbed Compose UI: one tab per directory in `assets/spartan-backend/circuits/`, each with a **Generate proof** button and a status read-out.
+  - Entry point is `MainActivity.kt`, which renders a tabbed Compose UI: one tab per directory in `assets/spartan-backend/circuits/`, each with **Generate proof** and **Verify proof** buttons and a status read-out. A proof must be generated before the **Verify proof** button is enabled.
   - `AssetUtils.kt` copies circuit directories from assets to `filesDir/circuits/` and includes a fallback that re-gzips witness files if the Android build tools strip or decompress the `.gz` extension.
 
 - **`noir_spartan/`** — Rust crate that exposes ZKP utilities to Android.

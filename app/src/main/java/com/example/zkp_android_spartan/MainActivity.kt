@@ -7,6 +7,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -95,10 +97,12 @@ fun CircuitTab(circuitName: String) {
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf("") }
     var isRunning by remember { mutableStateOf(false) }
+    var proofResult by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)
@@ -124,6 +128,7 @@ fun CircuitTab(circuitName: String) {
                         val elapsed = SystemClock.elapsedRealtime() - start
 
                         if (proof.isNotEmpty()) {
+                            proofResult = proof
                             val msg = "Proof generated successfully in ${elapsed}ms"
                             Log.i(TAG, "[$circuitName] $msg")
                             msg
@@ -153,11 +158,62 @@ fun CircuitTab(circuitName: String) {
             Text(if (isRunning) "Generating…" else "Generate proof")
         }
 
+        Button(
+            onClick = {
+                val currentProof = proofResult
+                if (currentProof == null) {
+                    status = "No proof available; generate one first"
+                } else {
+                    status = "Verifying…"
+                    isRunning = true
+                    scope.launch(Dispatchers.IO) {
+                        val result = try {
+                            val assetPath = "spartan-backend/circuits/$circuitName"
+                            val circuitDir = File(context.filesDir, "circuits/$circuitName")
+                            copyCircuitToFiles(context, assetPath, circuitDir)
+
+                            val start = SystemClock.elapsedRealtime()
+                            val verified = verify(circuitDir.absolutePath, currentProof)
+                            val elapsed = SystemClock.elapsedRealtime() - start
+
+                            if (verified) {
+                                val msg = "Proof verified successfully in ${elapsed}ms"
+                                Log.i(TAG, "[$circuitName] $msg")
+                                msg
+                            } else {
+                                val msg = "Proof verification failed"
+                                Log.e(TAG, "[$circuitName] verify returned false")
+                                msg
+                            }
+                        } catch (e: IOException) {
+                            val msg = "Failed to prepare circuit: ${e.message}"
+                            Log.e(TAG, "[$circuitName] $msg", e)
+                            msg
+                        } catch (e: Exception) {
+                            val msg = "Proof verification failed: ${e.message}"
+                            Log.e(TAG, "[$circuitName] Unexpected error", e)
+                            msg
+                        }
+
+                        withContext(Dispatchers.Main) {
+                            status = result
+                            isRunning = false
+                        }
+                    }
+                }
+            },
+            enabled = !isRunning && proofResult != null
+        ) {
+            Text(if (isRunning) "Verifying…" else "Verify proof")
+        }
+
         if (status.isNotEmpty()) {
             Text(
                 text = status,
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (status.startsWith("Proof generated successfully")) {
+                color = if (status.startsWith("Proof generated successfully") ||
+                    status.startsWith("Proof verified successfully")
+                ) {
                     MaterialTheme.colorScheme.primary
                 } else {
                     MaterialTheme.colorScheme.error

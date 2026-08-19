@@ -8,7 +8,7 @@
 - A Rust crate (`noir_spartan/`) that exposes ZKP utilities to Android via [UniFFI](https://mozilla.github.io/uniffi-rs/).
 - A vendored/included Spartan backend and Noir circuits under `app/src/main/assets/spartan-backend/` (managed as a Git submodule).
 
-The Rust side is functional (it can prove real Noir circuits), and the Android UI is a tabbed Compose screen that calls `generate_proof` for each circuit directory it discovers. The UniFFI Kotlin bindings and compiled `.so` libraries are **generated artifacts**; they are present in this workspace but are listed in `.gitignore` and are not committed to the repository.
+The Rust side is functional (it can prove and verify real Noir circuits), and the Android UI is a tabbed Compose screen with **Generate proof** and **Verify proof** buttons for each circuit directory it discovers. The UniFFI Kotlin bindings and compiled `.so` libraries are **generated artifacts**; they are present in this workspace but are listed in `.gitignore` and are not committed to the repository.
 
 ## Repository Layout
 
@@ -166,10 +166,10 @@ Two host-specific build workarounds:
 - The Android app uses JNA (via `net.java.dev.jna:jna:5.19.1`) to load the native library.
 - `app/build.gradle.kts` configures `androidResources { noCompress += "gz" }` so that `.gz` witness files are stored as-is in the APK. Without this, AAPT compresses them and `AssetManager.open()` returns decompressed bytes, breaking the prover.
 - `AssetUtils.kt` includes additional fallback logic: if the Android build tools strip the `.gz` extension from a compressed witness asset, the helper re-gzips the decompressed stream when copying it back to `target/<circuit>.gz`.
-- The Android app is a tabbed Compose screen. It discovers every circuit directory under `assets/spartan-backend/circuits/` and creates one tab per directory. Not every directory is a standalone provable circuit:
+- The Android app is a tabbed Compose screen with vertically scrollable content. It discovers every circuit directory under `assets/spartan-backend/circuits/` and creates one tab per directory. Each tab has **Generate proof** and **Verify proof** buttons; **Verify proof** is enabled only after a proof has been generated. Not every directory is a standalone provable circuit:
   - `c9000_benchmark/` contains a benchmark circuit but no `target/` artifacts or `Prover.toml`.
   - `eid/` is a shared Noir library used by `c0200_swiyu_jwt`, not a standalone circuit.
-  Pressing **Generate proof** on these tabs will fail.
+  Pressing **Generate proof** on these tabs will fail, and **Verify proof** remains disabled until a proof is produced.
 - The vendored `spartan-backend` is a large Rust codebase that pulls in a forked Noir compiler/toolchain; initial builds can be slow.
 - Circuit target artifacts (`circuits/*/target/`) are intentionally versioned in the submodule because the generated ACIR bytecode is part of the tracked backend test corpus.
 - For circuit compilation from source, use the `nargo-t256` build of the `eid-privacy/noir` fork at tag `t256-v0.22-1`.
