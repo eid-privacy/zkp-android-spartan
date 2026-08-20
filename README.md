@@ -77,6 +77,12 @@ Adjust target architectures, library path, and output directory as needed. The o
 
 ### Spartan backend and circuits (inside assets submodule)
 
+To compile the circuits for the Android app,
+
+1. `cd app/src/main/assets/spartan-backend/spartan-backend`
+2. `devbox run build`
+3. `devbox run start`
+
 The backend can be built and run standalone to prove/verify any circuit in `app/src/main/assets/spartan-backend/circuits/`:
 
 ```bash
