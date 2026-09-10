@@ -54,6 +54,20 @@ class MainActivity : ComponentActivity() {
 
 private const val TAG = "ZKP"
 
+private val BENCHMARK_CIRCUITS = listOf(
+    "c0200_swiyu_jwt",
+    "c0202_sicpa_backend_constant"
+)
+
+data class BenchmarkResult(
+    val circuitName: String,
+    val operation: String,
+    val count: Int,
+    val minMs: Long,
+    val maxMs: Long,
+    val avgMs: Double
+)
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ProofApp() {
@@ -61,7 +75,8 @@ fun ProofApp() {
     val circuits = remember {
         context.assets.list("spartan-backend/circuits")?.sorted() ?: emptyList()
     }
-    val pagerState = rememberPagerState(pageCount = { circuits.size })
+    val allTabs = remember { listOf("Benchmarks") + circuits }
+    val pagerState = rememberPagerState(pageCount = { allTabs.size })
     val scope = rememberCoroutineScope()
 
     Log.d("CircuitDebug", "Number of circuits found: ${circuits.size}")
@@ -72,11 +87,11 @@ fun ProofApp() {
                 .padding(innerPadding)
         ) {
             ScrollableTabRow(selectedTabIndex = pagerState.currentPage) {
-                circuits.forEachIndexed { index, circuit ->
+                allTabs.forEachIndexed { index, tab ->
                     Tab(
                         selected = pagerState.currentPage == index,
                         onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
-                        text = { Text(circuit, maxLines = 1) }
+                        text = { Text(tab, maxLines = 1) }
                     )
                 }
             }
@@ -85,7 +100,170 @@ fun ProofApp() {
                 state = pagerState,
                 modifier = Modifier.weight(1f)
             ) { page ->
-                CircuitTab(circuitName = circuits[page])
+                if (page == 0) {
+                    BenchmarkTab(circuits = circuits)
+                } else {
+                    CircuitTab(circuitName = circuits[page - 1])
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun BenchmarkTab(circuits: List<String>) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isRunning by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<BenchmarkResult>>(emptyList()) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)
+    ) {
+        Text(
+            text = "Benchmarks",
+            style = MaterialTheme.typography.headlineSmall
+        )
+
+        Button(
+            onClick = {
+                status = "Running benchmarks…"
+                isRunning = true
+                results = emptyList()
+                scope.launch(Dispatchers.IO) {
+                    val benchmarkResults = mutableListOf<BenchmarkResult>()
+                    val missing = BENCHMARK_CIRCUITS.filter { it !in circuits }
+                    if (missing.isNotEmpty()) {
+                        status = "Circuit(s) not found: ${missing.joinToString(", ")}"
+                        isRunning = false
+                        return@launch
+                    }
+
+                    BENCHMARK_CIRCUITS.forEach { circuitName ->
+                        val assetPath = "spartan-backend/circuits/$circuitName"
+                        val circuitDir = File(context.filesDir, "circuits/$circuitName")
+                        copyCircuitToFiles(context, assetPath, circuitDir)
+
+                        withContext(Dispatchers.Main) {
+                            status = "Benchmarking $circuitName: generation…"
+                        }
+
+                        val proofTimesMs = mutableListOf<Long>()
+                        var lastProof = ""
+                        repeat(100) {
+                            Log.d(TAG, "[$circuitName] proof run ${it + 1}/100")
+                            if ((it + 1) % 10 == 0) {
+                                withContext(Dispatchers.Main) {
+                                    status = "Benchmarking $circuitName: generation ${it + 1}/100…"
+                                }
+                            }
+                            val start = SystemClock.elapsedRealtime()
+                            lastProof = generateProof(circuitDir.absolutePath)
+                            proofTimesMs.add(SystemClock.elapsedRealtime() - start)
+                        }
+
+                        benchmarkResults.add(
+                            BenchmarkResult(
+                                circuitName = circuitName,
+                                operation = "Proof generation",
+                                count = proofTimesMs.size,
+                                minMs = proofTimesMs.min(),
+                                maxMs = proofTimesMs.max(),
+                                avgMs = proofTimesMs.average()
+                            )
+                        )
+
+                        withContext(Dispatchers.Main) {
+                            status = "Benchmarking $circuitName: verification…"
+                        }
+
+                        val verifyTimesMs = mutableListOf<Long>()
+                        repeat(100) {
+                            Log.d(TAG, "[$circuitName] verification run ${it + 1}/100")
+                            if ((it + 1) % 10 == 0) {
+                                withContext(Dispatchers.Main) {
+                                    status = "Benchmarking $circuitName: verification ${it + 1}/100…"
+                                }
+                            }
+                            val start = SystemClock.elapsedRealtime()
+                            verify(circuitDir.absolutePath, lastProof)
+                            verifyTimesMs.add(SystemClock.elapsedRealtime() - start)
+                        }
+
+                        benchmarkResults.add(
+                            BenchmarkResult(
+                                circuitName = circuitName,
+                                operation = "Proof verification",
+                                count = verifyTimesMs.size,
+                                minMs = verifyTimesMs.min(),
+                                maxMs = verifyTimesMs.max(),
+                                avgMs = verifyTimesMs.average()
+                            )
+                        )
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        results = benchmarkResults
+                        status = "Benchmarks complete"
+                        isRunning = false
+                    }
+                }
+            },
+            enabled = !isRunning
+        ) {
+            Text(if (isRunning) "Running benchmarks…" else "Run benchmarks")
+        }
+
+        if (status.isNotEmpty()) {
+            Text(
+                text = status,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (status == "Benchmarks complete") {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.error
+                }
+            )
+        }
+
+        results.groupBy { it.circuitName }.forEach { (circuitName, circuitResults) ->
+            Text(
+                text = circuitName,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            circuitResults.forEach { result ->
+                Column(
+                    modifier = Modifier.padding(start = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = result.operation,
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                    Text(
+                        text = "Runs: ${result.count}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = "Shortest: ${result.minMs} ms",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = "Longest: ${result.maxMs} ms",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = "Average: %.2f ms".format(result.avgMs),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
         }
     }
