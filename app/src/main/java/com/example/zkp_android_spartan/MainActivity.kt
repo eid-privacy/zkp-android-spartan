@@ -73,7 +73,9 @@ data class BenchmarkResult(
 fun ProofApp() {
     val context = LocalContext.current
     val circuits = remember {
-        context.assets.list("spartan-backend/circuits")?.sorted() ?: emptyList()
+        val available = context.assets.list("spartan-backend/circuits")?.sorted() ?: emptyList()
+        // Only show the circuits that are benchmarked via the Benchmarks tab's button
+        BENCHMARK_CIRCUITS.filter { it in available }
     }
     val allTabs = remember { listOf("Benchmarks") + circuits }
     val pagerState = rememberPagerState(pageCount = { allTabs.size })
