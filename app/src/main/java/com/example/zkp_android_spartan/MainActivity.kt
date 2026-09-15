@@ -10,18 +10,21 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -88,14 +91,49 @@ fun ProofApp() {
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            ScrollableTabRow(selectedTabIndex = pagerState.currentPage) {
-                allTabs.forEachIndexed { index, tab ->
-                    Tab(
-                        selected = pagerState.currentPage == index,
-                        onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
-                        text = { Text(tab, maxLines = 1) }
-                    )
+            // Collapsible menu: collapsed shows only the menu button and the
+            // current view's title; opened it lists all views and switches them.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                var menuExpanded by remember { mutableStateOf(false) }
+
+                Box {
+                    TextButton(onClick = { menuExpanded = true }) {
+                        Text("Menu")
+                    }
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false }
+                    ) {
+                        allTabs.forEachIndexed { index, tab ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        tab,
+                                        maxLines = 1,
+                                        color = if (index == pagerState.currentPage) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        }
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    scope.launch { pagerState.animateScrollToPage(index) }
+                                }
+                            )
+                        }
+                    }
                 }
+                Text(
+                    text = allTabs[pagerState.currentPage],
+                    style = MaterialTheme.typography.titleMedium
+                )
             }
 
             HorizontalPager(
