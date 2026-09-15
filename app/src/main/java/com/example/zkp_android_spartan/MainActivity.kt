@@ -316,6 +316,7 @@ fun CircuitTab(circuitName: String) {
     var status by remember { mutableStateOf("") }
     var isRunning by remember { mutableStateOf(false) }
     var proofResult by remember { mutableStateOf<String?>(null) }
+    var precomputeSuccess by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -329,6 +330,99 @@ fun CircuitTab(circuitName: String) {
             text = circuitName,
             style = MaterialTheme.typography.headlineSmall
         )
+
+        Button(
+            onClick = {
+                status = "Precomputing…"
+                isRunning = true
+                scope.launch(Dispatchers.IO) {
+                    var success = false
+                    val result = try {
+                        val assetPath = "spartan-backend/circuits/$circuitName"
+                        val circuitDir = File(context.filesDir, "circuits/$circuitName")
+                        copyCircuitToFiles(context, assetPath, circuitDir)
+
+                        val start = SystemClock.elapsedRealtime()
+                        // `precomputeProof` is provided by the UniFFI-generated Kotlin bindings.
+                        success = precomputeProof(circuitDir.absolutePath)
+                        val elapsed = SystemClock.elapsedRealtime() - start
+
+                        if (success) {
+                            val msg = "Precomputation completed successfully in ${elapsed}ms"
+                            Log.i(TAG, "[$circuitName] $msg")
+                            msg
+                        } else {
+                            val msg = "Precomputation failed"
+                            Log.e(TAG, "[$circuitName] precompute_proof returned false")
+                            msg
+                        }
+                    } catch (e: IOException) {
+                        val msg = "Failed to prepare circuit: ${e.message}"
+                        Log.e(TAG, "[$circuitName] $msg", e)
+                        msg
+                    } catch (e: Exception) {
+                        val msg = "Precomputation failed: ${e.message}"
+                        Log.e(TAG, "[$circuitName] Unexpected error", e)
+                        msg
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        status = result
+                        precomputeSuccess = success
+                        isRunning = false
+                    }
+                }
+            },
+            enabled = !isRunning
+        ) {
+            Text(if (isRunning) "Precomputing…" else "Precompute proof")
+        }
+
+        Button(
+            onClick = {
+                status = "Preparing…"
+                isRunning = true
+                scope.launch(Dispatchers.IO) {
+                    val result = try {
+                        val assetPath = "spartan-backend/circuits/$circuitName"
+                        val circuitDir = File(context.filesDir, "circuits/$circuitName")
+                        copyCircuitToFiles(context, assetPath, circuitDir)
+
+                        val start = SystemClock.elapsedRealtime()
+                        // `generateProofPrecomputed` is provided by the UniFFI-generated Kotlin bindings.
+                        val proof = generateProofPrecomputed(circuitDir.absolutePath)
+                        val elapsed = SystemClock.elapsedRealtime() - start
+
+                        if (proof.isNotEmpty()) {
+                            proofResult = proof
+                            val msg = "Proof generated successfully in ${elapsed}ms"
+                            Log.i(TAG, "[$circuitName] $msg")
+                            msg
+                        } else {
+                            val msg = "Proof generation failed"
+                            Log.e(TAG, "[$circuitName] generateProofPrecomputed returned empty proof")
+                            msg
+                        }
+                    } catch (e: IOException) {
+                        val msg = "Failed to prepare circuit: ${e.message}"
+                        Log.e(TAG, "[$circuitName] $msg", e)
+                        msg
+                    } catch (e: Exception) {
+                        val msg = "Proof generation failed: ${e.message}"
+                        Log.e(TAG, "[$circuitName] Unexpected error", e)
+                        msg
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        status = result
+                        isRunning = false
+                    }
+                }
+            },
+            enabled = !isRunning && precomputeSuccess
+        ) {
+            Text(if (isRunning) "Generating…" else "Generate proof (precomputed)")
+        }
 
         Button(
             onClick = {
@@ -430,7 +524,8 @@ fun CircuitTab(circuitName: String) {
                 text = status,
                 style = MaterialTheme.typography.bodyLarge,
                 color = if (status.startsWith("Proof generated successfully") ||
-                    status.startsWith("Proof verified successfully")
+                    status.startsWith("Proof verified successfully") ||
+                    status.startsWith("Precomputation completed successfully")
                 ) {
                     MaterialTheme.colorScheme.primary
                 } else {
