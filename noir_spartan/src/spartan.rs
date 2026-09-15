@@ -3,9 +3,27 @@ use spartan_backend::{
     prove_circuit,
     proof_to_base64,
     verify_circuit_from_base64,
+    run_precompute,
+    prove_with_precompute,
 };
 
 use std::path::PathBuf;
+
+#[uniffi::export]
+pub fn precompute_proof(pwd: String) -> bool {
+    let dir = PathBuf::from(pwd);
+    let circuit = instantiate_circuit_from_dir(&dir);
+    let result = run_precompute(&circuit);
+    match result {
+        Ok(_) => {
+            true
+        },
+        Err(e) => {
+            eprintln!("failed to precompute proof: {}", e);
+            false
+        }
+    }
+}
 
 #[uniffi::export]
 pub fn generate_proof(pwd: String) -> String {
@@ -15,6 +33,22 @@ pub fn generate_proof(pwd: String) -> String {
     match result {
         Ok(proof) => {
             proof_to_base64(&proof)
+        },
+        Err(e) => {
+            eprintln!("failed to generate proof: {}", e);
+            String::new()
+        }
+    }
+}
+
+#[uniffi::export]
+pub fn generate_proof_precomputed(pwd: String) -> String {
+    let dir = PathBuf::from(pwd);
+    let circuit = instantiate_circuit_from_dir(&dir);
+    let result = prove_with_precompute(&circuit);
+    match result {
+        Ok(proof) => {
+            proof
         },
         Err(e) => {
             eprintln!("failed to generate proof: {}", e);
