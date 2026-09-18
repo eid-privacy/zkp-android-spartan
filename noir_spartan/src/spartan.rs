@@ -8,9 +8,66 @@ use spartan_backend::{
 };
 
 use std::path::PathBuf;
+use std::sync::OnceLock;
+use tracing_subscriber::fmt::MakeWriter;
+
+struct LogcatBridge;
+
+impl<'a> MakeWriter<'a> for LogcatBridge {
+    type Writer = LogcatBridgeWriter;
+
+    fn make_writer(&'a self) -> Self::Writer {
+        LogcatBridgeWriter
+    }
+}
+
+struct LogcatBridgeWriter;
+
+impl std::io::Write for LogcatBridgeWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let text = String::from_utf8_lossy(buf);
+        let line = text.trim_end();
+        if !line.is_empty() {
+            #[cfg(target_os = "android")]
+            log::info!("{line}");
+            #[cfg(not(target_os = "android"))]
+            println!("{line}");
+        }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+static INIT_LOGGING: OnceLock<()> = OnceLock::new();
+
+fn init_logging() {
+    INIT_LOGGING.get_or_init(|| {
+        #[cfg(target_os = "android")]
+        android_logger::init_once(
+            android_logger::Config::default()
+                .with_max_level(log::LevelFilter::Info)
+                .with_tag("noir_spartan"),
+        );
+        let subscriber = tracing_subscriber::fmt()
+            .without_time()
+            .with_ansi(false)
+            .with_max_level(tracing::Level::INFO)
+            .with_writer(LogcatBridge)
+            .finish();
+
+        // Install only the tracing global default. `.init()` would also try to
+        // install the tracing-log bridge as the global `log` logger, which
+        // conflicts with android_logger above and panics with SetLoggerError(()).
+        let _ = tracing::subscriber::set_global_default(subscriber);
+    });
+}
 
 #[uniffi::export]
 pub fn precompute_proof(pwd: String) -> bool {
+    init_logging();
     let dir = PathBuf::from(pwd);
     let circuit = instantiate_circuit_from_dir(&dir);
     let result = run_precompute(&circuit);
@@ -19,7 +76,7 @@ pub fn precompute_proof(pwd: String) -> bool {
             true
         },
         Err(e) => {
-            eprintln!("failed to precompute proof: {}", e);
+            tracing::error!("failed to precompute proof: {}", e);
             false
         }
     }
@@ -27,6 +84,7 @@ pub fn precompute_proof(pwd: String) -> bool {
 
 #[uniffi::export]
 pub fn generate_proof(pwd: String) -> String {
+    init_logging();
     let dir = PathBuf::from(pwd);
     let circuit = instantiate_circuit_from_dir(&dir);
     let result = prove_circuit(&circuit);
@@ -35,7 +93,7 @@ pub fn generate_proof(pwd: String) -> String {
             proof_to_base64(&proof)
         },
         Err(e) => {
-            eprintln!("failed to generate proof: {}", e);
+            tracing::error!("failed to generate proof: {}", e);
             String::new()
         }
     }
@@ -43,6 +101,7 @@ pub fn generate_proof(pwd: String) -> String {
 
 #[uniffi::export]
 pub fn generate_proof_precomputed(pwd: String) -> String {
+    init_logging();
     let dir = PathBuf::from(pwd);
     let circuit = instantiate_circuit_from_dir(&dir);
     let result = prove_with_precompute(&circuit);
@@ -51,7 +110,7 @@ pub fn generate_proof_precomputed(pwd: String) -> String {
             proof
         },
         Err(e) => {
-            eprintln!("failed to generate proof: {}", e);
+            tracing::error!("failed to generate proof: {}", e);
             String::new()
         }
     }
@@ -59,6 +118,7 @@ pub fn generate_proof_precomputed(pwd: String) -> String {
 
 #[uniffi::export]
 pub fn verify(pwd: String, proof: String) -> bool {
+    init_logging();
     let dir = PathBuf::from(pwd);
     let circuit = instantiate_circuit_from_dir(&dir);
     let result = verify_circuit_from_base64(&circuit, &proof);
@@ -67,7 +127,7 @@ pub fn verify(pwd: String, proof: String) -> bool {
             true
         }
         Err(e) => {
-            eprintln!("failed to verify proof: {}", e);
+            tracing::error!("failed to verify proof: {}", e);
             false
         }
     }
