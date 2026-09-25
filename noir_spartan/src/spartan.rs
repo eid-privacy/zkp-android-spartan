@@ -66,18 +66,18 @@ fn init_logging() {
 }
 
 #[uniffi::export]
-pub fn precompute_proof(pwd: String) -> bool {
+pub fn precompute_proof(pwd: String) -> String {
     init_logging();
     let dir = PathBuf::from(pwd);
     let circuit = instantiate_circuit_from_dir(&dir);
     let result = run_precompute(&circuit);
     match result {
-        Ok(_) => {
-            true
+        Ok(path) => {
+            path.to_str().map_or_else(String::new, |s| s.to_string())
         },
         Err(e) => {
             tracing::error!("failed to precompute proof: {}", e);
-            false
+            String::new()
         }
     }
 }
@@ -100,11 +100,11 @@ pub fn generate_proof(pwd: String) -> String {
 }
 
 #[uniffi::export]
-pub fn generate_proof_precomputed(pwd: String) -> String {
+pub fn generate_proof_precomputed(pwd: String, path: String) -> String {
     init_logging();
     let dir = PathBuf::from(pwd);
     let circuit = instantiate_circuit_from_dir(&dir);
-    let result = prove_with_precompute(&circuit);
+    let result = prove_with_precompute(&circuit, PathBuf::from(path));
     match result {
         Ok(proof) => {
             proof
