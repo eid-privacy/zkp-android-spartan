@@ -189,8 +189,8 @@ fun BenchmarkTab(circuits: List<String>) {
                     BENCHMARK_CIRCUITS.forEach { circuitName ->
                         val assetPath = "spartan-backend/circuits/$circuitName"
                         val circuitDir = File(context.filesDir, "circuits/$circuitName")
-                        copyCircuitToFiles(context, assetPath, circuitDir)
-                        // `copyCircuitToFiles` preserves target/precompute.bin if it
+                        copyCircuitFromAssets(context, assetPath, circuitDir)
+                        // `copyCircuitFromAssets` preserves target/precompute.bin if it
                         // exists; delete any leftover artifact so the monolithic
                         // generation benchmark is not contaminated by a precomputed state.
                         File(circuitDir, "target/precompute.bin").delete()
@@ -391,7 +391,7 @@ fun CircuitTab(circuitName: String) {
                     val result = try {
                         val assetPath = "spartan-backend/circuits/$circuitName"
                         val circuitDir = File(context.filesDir, "circuits/$circuitName")
-                        copyCircuitToFiles(context, assetPath, circuitDir)
+                        copyCircuitFromAssets(context, assetPath, circuitDir)
 
                         val start = SystemClock.elapsedRealtime()
                         // `precomputeProof` is provided by the UniFFI-generated Kotlin
@@ -445,7 +445,7 @@ fun CircuitTab(circuitName: String) {
                         val result = try {
                             val assetPath = "spartan-backend/circuits/$circuitName"
                             val circuitDir = File(context.filesDir, "circuits/$circuitName")
-                            copyCircuitToFiles(context, assetPath, circuitDir)
+                            copyCircuitFromAssets(context, assetPath, circuitDir)
 
                             val start = SystemClock.elapsedRealtime()
                             // `generateProofPrecomputed` is provided by the UniFFI-generated
@@ -497,7 +497,7 @@ fun CircuitTab(circuitName: String) {
                     val result = try {
                         val assetPath = "spartan-backend/circuits/$circuitName"
                         val circuitDir = File(context.filesDir, "circuits/$circuitName")
-                        copyCircuitToFiles(context, assetPath, circuitDir)
+                        copyCircuitFromAssets(context, assetPath, circuitDir)
 
                         val start = SystemClock.elapsedRealtime()
                         // `generate_proof` is provided by the UniFFI-generated Kotlin bindings.
@@ -547,7 +547,7 @@ fun CircuitTab(circuitName: String) {
                         val result = try {
                             val assetPath = "spartan-backend/circuits/$circuitName"
                             val circuitDir = File(context.filesDir, "circuits/$circuitName")
-                            copyCircuitToFiles(context, assetPath, circuitDir)
+                            copyCircuitFromAssets(context, assetPath, circuitDir)
 
                             val start = SystemClock.elapsedRealtime()
                             val verified = verify(circuitDir.absolutePath, currentProof)
