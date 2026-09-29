@@ -135,7 +135,7 @@ dependencies = [
 [[package]]
 name = "algebra-utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/eid-privacy/spartan-backend#71aead493531684320153a7b679d39d00eca5c2b"
+source = "git+ssh://git@github.com/eid-privacy/spartan-backend#ffbbd372afd559d7e2c4a7f7ab26f4d87cee79cb"
 dependencies = [
  "num-bigint 0.5.1",
  "num-traits",
@@ -3858,7 +3858,7 @@ dependencies = [
 [[package]]
 name = "spartan-backend"
 version = "0.1.0"
-source = "git+ssh://git@github.com/eid-privacy/spartan-backend#71aead493531684320153a7b679d39d00eca5c2b"
+source = "git+ssh://git@github.com/eid-privacy/spartan-backend#ffbbd372afd559d7e2c4a7f7ab26f4d87cee79cb"
 dependencies = [
  "acir",
  "acvm",
