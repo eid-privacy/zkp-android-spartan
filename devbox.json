@@ -26,7 +26,7 @@
     "scripts": {
       "cargo":             ["cargo \"$@\""],
       "rust_build":        ["cd noir_spartan && cargo build --release"],
-      "gen_bindings":      ["cd noir_spartan && cargo run --bin uniffi-bindgen generate --no-format --library ./target/release/libnoir_spartan.so --language kotlin --out-dir ../app/src/main/java/com/example/zkp_android_spartan/"],
+      "gen_bindings":      ["cd noir_spartan && cargo run --bin uniffi-bindgen generate --no-format --library ./target/release/libnoir_spartan.$([ \"$(uname)\" = Darwin ] && echo dylib || echo so) --language kotlin --out-dir ../app/src/main/java/com/example/zkp_android_spartan/"],
       "ndk_build":         ["cd noir_spartan && cargo ndk -t arm64-v8a -t x86_64 -o ../app/src/main/jniLibs build --release"],
       "gradle":            ["./gradlew \"$@\""],
       "build_apk":         ["./gradlew :app:assembleDebug"],

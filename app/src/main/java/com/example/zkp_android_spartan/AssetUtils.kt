@@ -2,7 +2,6 @@ package com.example.zkp_android_spartan
 
 import android.content.Context
 import java.io.File
-import java.io.FileNotFoundException
 import java.util.zip.GZIPOutputStream
 
 /** directory holding circuit artifacts */
@@ -45,16 +44,16 @@ fun extractAsset(context: Context, asset: String, destDir: File) {
  */
 fun copyCircuitFromAssets(context: Context, asset: String, destDir: File) {
     extractAsset(context, asset, destDir)
-    // restores the artifacts under `<circuitDir>/target/`
-    // re-gzip assets that AAPT gunzipped
+    // the backend expects the witness at `target/<circuit>.gz`; if AAPT
+    // gunzipped it and stripped the extension (stored as `target/<circuit>`),
+    // re-gzip it
     val circuitName = destDir.name
-    val fileName = "$circuitName.gz"
-    val fileDest = File(File(destDir, TARGET_DIR), fileName)
+    val fileDest = File(File(destDir, TARGET_DIR), "$circuitName.gz")
     if (!fileDest.exists()) {
-       context.assets.open("$asset/$TARGET_DIR/fileName").use { input ->
-           fileDest.outputStream().use { output ->
-               GZIPOutputStream(output).use { gz -> input.copyTo(gz) }
-           }
+        context.assets.open("$asset/$TARGET_DIR/$circuitName").use { input ->
+            fileDest.outputStream().use { output ->
+                GZIPOutputStream(output).use { gz -> input.copyTo(gz) }
+            }
         }
     }
 }
