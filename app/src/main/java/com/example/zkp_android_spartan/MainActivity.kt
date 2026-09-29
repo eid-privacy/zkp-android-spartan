@@ -58,7 +58,7 @@ class MainActivity : ComponentActivity() {
 }
 
 private const val TAG = "ZKP"
-private const val BENCHMARK_ITERATIONS = 100
+private const val BENCHMARK_ITERATIONS = 5
 private const val PROGRESS_INTERVAL = 10
 private val BENCHMARK_CIRCUITS = listOf(
     "c0200_swiyu_jwt",
