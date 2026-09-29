@@ -46,6 +46,12 @@ fun copyAssetDirToFiles(context: Context, assetPath: String, destDir: File) {
  * as `target/<circuit>` instead of `target/<circuit>.gz`), so the recursive
  * copy alone may leave the prover unable to find `target/<circuit>.gz`.
  *
+ * The Rust-produced `target/precompute.bin` artifact (written by
+ * `precomputeProof`) is not shipped in assets, and the recursive copy deletes
+ * the whole circuit directory. If such a file exists at [destDir], it is backed
+ * up before the copy and restored afterwards so that the path returned by
+ * `precomputeProof` stays valid for `generateProofPrecomputed`.
+ *
  * @param context Android context, used to access the AssetManager.
  * @param assetPath Path inside assets to the circuit directory,
  *                  e.g. "spartan-backend/circuits/c0000_trivial".
@@ -53,57 +59,73 @@ fun copyAssetDirToFiles(context: Context, assetPath: String, destDir: File) {
  * @throws IOException if the asset cannot be read or the destination cannot be written.
  */
 fun copyCircuitToFiles(context: Context, assetPath: String, destDir: File) {
-    copyAssetDirToFiles(context, assetPath, destDir)
-
-    val circuitName = destDir.name
-    val targetAssetPath = "$assetPath/target"
     val targetDir = File(destDir, "target")
+    val precomputeFile = File(targetDir, "precompute.bin")
+    var backup: File? = null
+    if (precomputeFile.exists()) {
+        backup = File.createTempFile("precompute", ".bin", context.cacheDir)
+        precomputeFile.copyTo(backup, overwrite = true)
+    }
 
-    listOf(
-        "$circuitName.json" to File(targetDir, "$circuitName.json"),
-        "$circuitName.gz" to File(targetDir, "$circuitName.gz")
-    ).forEach { (fileName, fileDest) ->
-        if (fileDest.exists()) return@forEach
+    try {
+        copyAssetDirToFiles(context, assetPath, destDir)
 
-        fileDest.parentFile?.mkdirs()
+        val circuitName = destDir.name
+        val targetAssetPath = "$assetPath/target"
 
-        // The Android build tools may strip the `.gz` extension from compressed
-        // assets, storing the witness file as `target/<circuit>` instead of
-        // `target/<circuit>.gz`. Try the canonical name first, then the fallback.
-        val assetNames = if (fileName.endsWith(".gz")) {
-            listOf(fileName, fileName.removeSuffix(".gz"))
-        } else {
-            listOf(fileName)
-        }
+        listOf(
+            "$circuitName.json" to File(targetDir, "$circuitName.json"),
+            "$circuitName.gz" to File(targetDir, "$circuitName.gz")
+        ).forEach { (fileName, fileDest) ->
+            if (fileDest.exists()) return@forEach
 
-        var copied = false
-        for (assetName in assetNames) {
-            try {
-                context.assets.open("$targetAssetPath/$assetName").use { input ->
-                    fileDest.outputStream().use { output ->
-                        // AAPT does not merely strip the `.gz` extension: it also
-                        // gunzips the asset, so the extension-less fallback holds
-                        // the raw, decompressed witness. When we take that fallback
-                        // for a `.gz` target, re-gzip it so the file written as
-                        // `<circuit>.gz` is valid gzip that the Spartan prover can
-                        // decompress. The canonical `.gz` asset (if AAPT ever
-                        // leaves one) is copied through unchanged.
-                        if (fileName.endsWith(".gz") && !assetName.endsWith(".gz")) {
-                            GZIPOutputStream(output).use { gz -> input.copyTo(gz) }
-                        } else {
-                            input.copyTo(output)
+            fileDest.parentFile?.mkdirs()
+
+            // The Android build tools may strip the `.gz` extension from compressed
+            // assets, storing the witness file as `target/<circuit>` instead of
+            // `target/<circuit>.gz`. Try the canonical name first, then the fallback.
+            val assetNames = if (fileName.endsWith(".gz")) {
+                listOf(fileName, fileName.removeSuffix(".gz"))
+            } else {
+                listOf(fileName)
+            }
+
+            var copied = false
+            for (assetName in assetNames) {
+                try {
+                    context.assets.open("$targetAssetPath/$assetName").use { input ->
+                        fileDest.outputStream().use { output ->
+                            // AAPT does not merely strip the `.gz` extension: it also
+                            // gunzips the asset, so the extension-less fallback holds
+                            // the raw, decompressed witness. When we take that fallback
+                            // for a `.gz` target, re-gzip it so the file written as
+                            // `<circuit>.gz` is valid gzip that the Spartan prover can
+                            // decompress. The canonical `.gz` asset (if AAPT ever
+                            // leaves one) is copied through unchanged.
+                            if (fileName.endsWith(".gz") && !assetName.endsWith(".gz")) {
+                                GZIPOutputStream(output).use { gz -> input.copyTo(gz) }
+                            } else {
+                                input.copyTo(output)
+                            }
                         }
                     }
+                    copied = true
+                    break
+                } catch (_: FileNotFoundException) {
+                    // Try the next candidate name.
                 }
-                copied = true
-                break
-            } catch (_: FileNotFoundException) {
-                // Try the next candidate name.
+            }
+
+            if (!copied) {
+                throw FileNotFoundException("$targetAssetPath/$fileName")
             }
         }
 
-        if (!copied) {
-            throw FileNotFoundException("$targetAssetPath/$fileName")
+        backup?.let {
+            targetDir.mkdirs()
+            it.copyTo(File(targetDir, "precompute.bin"), overwrite = true)
         }
+    } finally {
+        backup?.delete()
     }
 }

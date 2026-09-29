@@ -178,6 +178,7 @@ fun BenchmarkTab(circuits: List<String>) {
                 results = emptyList()
                 scope.launch(Dispatchers.IO) {
                     val benchmarkResults = mutableListOf<BenchmarkResult>()
+                    val precomputeFailures = mutableListOf<String>()
                     val missing = BENCHMARK_CIRCUITS.filter { it !in circuits }
                     if (missing.isNotEmpty()) {
                         status = "Circuit(s) not found: ${missing.joinToString(", ")}"
@@ -189,6 +190,10 @@ fun BenchmarkTab(circuits: List<String>) {
                         val assetPath = "spartan-backend/circuits/$circuitName"
                         val circuitDir = File(context.filesDir, "circuits/$circuitName")
                         copyCircuitToFiles(context, assetPath, circuitDir)
+                        // `copyCircuitToFiles` preserves target/precompute.bin if it
+                        // exists; delete any leftover artifact so the monolithic
+                        // generation benchmark is not contaminated by a precomputed state.
+                        File(circuitDir, "target/precompute.bin").delete()
 
                         withContext(Dispatchers.Main) {
                             status = "Benchmarking $circuitName: generation…"
@@ -218,6 +223,47 @@ fun BenchmarkTab(circuits: List<String>) {
                                 avgMs = proofTimesMs.average()
                             )
                         )
+
+                        withContext(Dispatchers.Main) {
+                            status = "Benchmarking $circuitName: precomputing…"
+                        }
+
+                        val precomputePath = precomputeProof(circuitDir.absolutePath)
+                        if (precomputePath.isEmpty()) {
+                            Log.e(TAG, "[$circuitName] precomputeProof returned empty path")
+                            precomputeFailures.add(circuitName)
+                            withContext(Dispatchers.Main) {
+                                status = "Benchmarking $circuitName: precomputation failed"
+                            }
+                        } else {
+                            withContext(Dispatchers.Main) {
+                                status = "Benchmarking $circuitName: precomputed generation…"
+                            }
+
+                            val precomputedTimesMs = mutableListOf<Long>()
+                            repeat(100) {
+                                Log.d(TAG, "[$circuitName] precomputed proof run ${it + 1}/100")
+                                if ((it + 1) % 10 == 0) {
+                                    withContext(Dispatchers.Main) {
+                                        status = "Benchmarking $circuitName: precomputed generation ${it + 1}/100…"
+                                    }
+                                }
+                                val start = SystemClock.elapsedRealtime()
+                                lastProof = generateProofPrecomputed(circuitDir.absolutePath, precomputePath)
+                                precomputedTimesMs.add(SystemClock.elapsedRealtime() - start)
+                            }
+
+                            benchmarkResults.add(
+                                BenchmarkResult(
+                                    circuitName = circuitName,
+                                    operation = "Proof generation (precomputed)",
+                                    count = precomputedTimesMs.size,
+                                    minMs = precomputedTimesMs.min(),
+                                    maxMs = precomputedTimesMs.max(),
+                                    avgMs = precomputedTimesMs.average()
+                                )
+                            )
+                        }
 
                         withContext(Dispatchers.Main) {
                             status = "Benchmarking $circuitName: verification…"
@@ -250,7 +296,11 @@ fun BenchmarkTab(circuits: List<String>) {
 
                     withContext(Dispatchers.Main) {
                         results = benchmarkResults
-                        status = "Benchmarks complete"
+                        status = if (precomputeFailures.isEmpty()) {
+                            "Benchmarks complete"
+                        } else {
+                            "Benchmarks complete; precomputation failed for: ${precomputeFailures.joinToString(", ")}"
+                        }
                         isRunning = false
                     }
                 }
@@ -316,7 +366,7 @@ fun CircuitTab(circuitName: String) {
     var status by remember { mutableStateOf("") }
     var isRunning by remember { mutableStateOf(false) }
     var proofResult by remember { mutableStateOf<String?>(null) }
-    var precomputeSuccess by remember { mutableStateOf(false) }
+    var precomputePath by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = Modifier
@@ -337,23 +387,28 @@ fun CircuitTab(circuitName: String) {
                 isRunning = true
                 scope.launch(Dispatchers.IO) {
                     var success = false
+                    var writtenPath: String? = null
                     val result = try {
                         val assetPath = "spartan-backend/circuits/$circuitName"
                         val circuitDir = File(context.filesDir, "circuits/$circuitName")
                         copyCircuitToFiles(context, assetPath, circuitDir)
 
                         val start = SystemClock.elapsedRealtime()
-                        // `precomputeProof` is provided by the UniFFI-generated Kotlin bindings.
-                        success = precomputeProof(circuitDir.absolutePath)
+                        // `precomputeProof` is provided by the UniFFI-generated Kotlin
+                        // bindings. It returns the absolute path of the written
+                        // target/precompute.bin artifact, or an empty string on failure.
+                        val path = precomputeProof(circuitDir.absolutePath)
                         val elapsed = SystemClock.elapsedRealtime() - start
 
+                        success = path.isNotEmpty()
                         if (success) {
+                            writtenPath = path
                             val msg = "Precomputation completed successfully in ${elapsed}ms"
                             Log.i(TAG, "[$circuitName] $msg")
                             msg
                         } else {
                             val msg = "Precomputation failed"
-                            Log.e(TAG, "[$circuitName] precompute_proof returned false")
+                            Log.e(TAG, "[$circuitName] precompute_proof returned empty path")
                             msg
                         }
                     } catch (e: IOException) {
@@ -368,7 +423,7 @@ fun CircuitTab(circuitName: String) {
 
                     withContext(Dispatchers.Main) {
                         status = result
-                        precomputeSuccess = success
+                        precomputePath = writtenPath
                         isRunning = false
                     }
                 }
@@ -380,46 +435,56 @@ fun CircuitTab(circuitName: String) {
 
         Button(
             onClick = {
-                status = "Preparing…"
-                isRunning = true
-                scope.launch(Dispatchers.IO) {
-                    val result = try {
-                        val assetPath = "spartan-backend/circuits/$circuitName"
-                        val circuitDir = File(context.filesDir, "circuits/$circuitName")
-                        copyCircuitToFiles(context, assetPath, circuitDir)
+                val currentPrecomputePath = precomputePath
+                if (currentPrecomputePath == null) {
+                    status = "No precomputed circuit available; run precompute first"
+                } else {
+                    status = "Preparing…"
+                    isRunning = true
+                    scope.launch(Dispatchers.IO) {
+                        val result = try {
+                            val assetPath = "spartan-backend/circuits/$circuitName"
+                            val circuitDir = File(context.filesDir, "circuits/$circuitName")
+                            copyCircuitToFiles(context, assetPath, circuitDir)
 
-                        val start = SystemClock.elapsedRealtime()
-                        // `generateProofPrecomputed` is provided by the UniFFI-generated Kotlin bindings.
-                        val proof = generateProofPrecomputed(circuitDir.absolutePath)
-                        val elapsed = SystemClock.elapsedRealtime() - start
+                            val start = SystemClock.elapsedRealtime()
+                            // `generateProofPrecomputed` is provided by the UniFFI-generated
+                            // Kotlin bindings. It takes the path of the precompute artifact
+                            // as returned by `precomputeProof`.
+                            val proof = generateProofPrecomputed(
+                                circuitDir.absolutePath,
+                                currentPrecomputePath
+                            )
+                            val elapsed = SystemClock.elapsedRealtime() - start
 
-                        if (proof.isNotEmpty()) {
-                            proofResult = proof
-                            val msg = "Proof generated successfully in ${elapsed}ms"
-                            Log.i(TAG, "[$circuitName] $msg")
+                            if (proof.isNotEmpty()) {
+                                proofResult = proof
+                                val msg = "Proof generated successfully in ${elapsed}ms"
+                                Log.i(TAG, "[$circuitName] $msg")
+                                msg
+                            } else {
+                                val msg = "Proof generation failed"
+                                Log.e(TAG, "[$circuitName] generateProofPrecomputed returned empty proof")
+                                msg
+                            }
+                        } catch (e: IOException) {
+                            val msg = "Failed to prepare circuit: ${e.message}"
+                            Log.e(TAG, "[$circuitName] $msg", e)
                             msg
-                        } else {
-                            val msg = "Proof generation failed"
-                            Log.e(TAG, "[$circuitName] generateProofPrecomputed returned empty proof")
+                        } catch (e: Exception) {
+                            val msg = "Proof generation failed: ${e.message}"
+                            Log.e(TAG, "[$circuitName] Unexpected error", e)
                             msg
                         }
-                    } catch (e: IOException) {
-                        val msg = "Failed to prepare circuit: ${e.message}"
-                        Log.e(TAG, "[$circuitName] $msg", e)
-                        msg
-                    } catch (e: Exception) {
-                        val msg = "Proof generation failed: ${e.message}"
-                        Log.e(TAG, "[$circuitName] Unexpected error", e)
-                        msg
-                    }
 
-                    withContext(Dispatchers.Main) {
-                        status = result
-                        isRunning = false
+                        withContext(Dispatchers.Main) {
+                            status = result
+                            isRunning = false
+                        }
                     }
                 }
             },
-            enabled = !isRunning && precomputeSuccess
+            enabled = !isRunning && precomputePath != null
         ) {
             Text(if (isRunning) "Generating…" else "Generate proof (precomputed)")
         }
