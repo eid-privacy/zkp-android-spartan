@@ -199,6 +199,7 @@ fun BenchmarkTab(circuits: List<String>) {
                                 results[circuitName] = outcome.first
                                 status[circuitName] = outcome.second
                                 isRunning[circuitName] = false
+                                logBenchmarkResults(circuitName, outcome.first)
                             }
                         }
                     }
@@ -553,6 +554,23 @@ private fun benchmarkResult(circuitName: String, operation: String, timesMs: Lis
         maxMs = timesMs.max(),
         avgMs = timesMs.average()
     )
+
+/**
+ * Logs the benchmark results with the exact same message that is shown on
+ * screen (operation, runs, shortest, longest and average times).
+ */
+private fun logBenchmarkResults(circuitName: String, results: List<BenchmarkResult>) {
+    results.forEach { result ->
+        Log.i(
+            TAG,
+            "[$circuitName] ${result.operation}\n" +
+                "Runs: ${result.count}\n" +
+                "Shortest: ${result.minMs} ms\n" +
+                "Longest: ${result.maxMs} ms\n" +
+                "Average: %.2f ms".format(result.avgMs)
+        )
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Circuit operations (blocking; call from a background dispatcher)
