@@ -109,6 +109,38 @@ The circuits ship with their compiled `target/` artifacts, so you do not have to
 - Only the two benchmark circuits appear in the app. Other circuits in the submodule are exercised through the standalone backend.
 - The app does not preserve its state: after the app is killed, or after leaving the Benchmarks page, you have to precompute or benchmark again.
 
+## Benchmarks
+
+To reproduce the `zkp.log` file, execute in the project root
+
+```bash
+./gradlew installDebug
+```
+
+to build the Android app.
+
+Make sure that your device is connected and run
+
+```bash
+adb logcat > "$(date -I).log"
+```
+
+to capture the log output. Finally, execute in a separate shell
+
+```
+adb shell am start -n com.example.zkp_android_spartan/.MainActivity
+```
+
+to load the Android app to the device and run it. You can then execute any desired benchmarks manually.
+
+To extract the relevant logs, use
+
+```bash
+grep -E 'ZKP|noir_spartan' $(date -I).log > zkp.log
+```
+
+and can then use the resulting log file for further processing (e.g. `grep -vE  'spartan_backend::precompute|circuit_instance|vega_prover' zkp.log` to get the only logs related to the benchmarks directly).
+
 ## License
 
 Mozilla Public License 2.0, see [LICENSE](LICENSE).
