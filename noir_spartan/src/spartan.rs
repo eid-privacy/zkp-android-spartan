@@ -1,5 +1,6 @@
 use spartan_backend::{
-    instantiate_circuit_from_dir,
+    instantiate_prover_circuit_from_dir,
+    instantiate_verifier_circuit_from_dir,
     prove_circuit,
     proof_to_base64,
     verify_circuit_from_base64,
@@ -69,7 +70,7 @@ fn init_logging() {
 pub fn precompute_proof(pwd: String) -> String {
     init_logging();
     let dir = PathBuf::from(pwd);
-    let circuit = instantiate_circuit_from_dir(&dir);
+    let circuit = instantiate_prover_circuit_from_dir(&dir);
     let result = run_precompute(&circuit);
     match result {
         Ok(path) => {
@@ -86,7 +87,7 @@ pub fn precompute_proof(pwd: String) -> String {
 pub fn generate_proof(pwd: String) -> String {
     init_logging();
     let dir = PathBuf::from(pwd);
-    let circuit = instantiate_circuit_from_dir(&dir);
+    let circuit = instantiate_prover_circuit_from_dir(&dir);
     let result = prove_circuit(&circuit);
     match result {
         Ok(proof) => {
@@ -103,7 +104,7 @@ pub fn generate_proof(pwd: String) -> String {
 pub fn generate_proof_precomputed(pwd: String, path: String) -> String {
     init_logging();
     let dir = PathBuf::from(pwd);
-    let circuit = instantiate_circuit_from_dir(&dir);
+    let circuit = instantiate_prover_circuit_from_dir(&dir);
     let result = prove_with_precompute(&circuit, PathBuf::from(path));
     match result {
         Ok(proof) => {
@@ -120,7 +121,7 @@ pub fn generate_proof_precomputed(pwd: String, path: String) -> String {
 pub fn verify(pwd: String, proof: String) -> bool {
     init_logging();
     let dir = PathBuf::from(pwd);
-    let circuit = instantiate_circuit_from_dir(&dir);
+    let circuit = instantiate_verifier_circuit_from_dir(&dir);
     let result = verify_circuit_from_base64(&circuit, &proof);
     match result {
         Ok(_) => {

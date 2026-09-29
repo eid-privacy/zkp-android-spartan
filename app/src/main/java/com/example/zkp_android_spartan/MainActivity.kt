@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import uniffi.noir_spartan.*
 import com.example.zkp_android_spartan.ui.theme.ZkpandroidspartanTheme
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -184,17 +185,19 @@ fun BenchmarkTab(circuits: List<String>) {
                         status[circuitName] = "Running benchmarks…"
                         results[circuitName] = emptyList()
                         scope.launch(Dispatchers.IO) {
-                            val (benchmarkResults, precomputeFailed) =
+                            val outcome = try {
                                 runBenchmark(context, circuitName, withPrecompute) { text ->
                                     withContext(Dispatchers.Main) { status[circuitName] = text }
-                                }
+                                } to "Benchmarks complete"
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                Log.e(TAG, "[$circuitName] Benchmark failed", e)
+                                emptyList<BenchmarkResult>() to "Benchmarks failed: ${e.message}"
+                            }
                             withContext(Dispatchers.Main) {
-                                results[circuitName] = benchmarkResults
-                                status[circuitName] = if (precomputeFailed) {
-                                    "Benchmarks failed; precomputation was not successful"
-                                } else {
-                                    "Benchmarks complete"
-                                }
+                                results[circuitName] = outcome.first
+                                status[circuitName] = outcome.second
                                 isRunning[circuitName] = false
                             }
                         }
@@ -407,16 +410,24 @@ fun CircuitTab(circuitName: String) {
 // Benchmark pipeline
 // ---------------------------------------------------------------------------
 
+/** Aborts a benchmark run when a proof operation fails. */
+private class BenchmarkException(message: String) : Exception(message)
+
+/**
+ * Runs a benchmark for [circuitName]. Every timed call is checked for success;
+ * a failed precomputation, proof generation or verification throws
+ * [BenchmarkException] instead of reporting timings of failed runs.
+ */
 private suspend fun runBenchmark(
     context: Context,
     circuitName: String,
     withPrecompute: Boolean,
     onStatus: suspend (String) -> Unit
-): Pair<List<BenchmarkResult>, Boolean> =
+): List<BenchmarkResult> =
     if (withPrecompute) {
         benchmarkCircuitPrecomputed(context, circuitName, onStatus)
     } else {
-        benchmarkCircuit(context, circuitName, onStatus) to false
+        benchmarkCircuit(context, circuitName, onStatus)
     }
 
 private suspend fun benchmarkCircuit(
@@ -425,7 +436,6 @@ private suspend fun benchmarkCircuit(
     onStatus: suspend (String) -> Unit
 ): List<BenchmarkResult> {
     val circuitDir = copyCircuitDir(context, circuitName)
-    File(circuitDir, "target/precompute.bin").delete()
 
     val (generationResult, lastProof) = benchmarkGeneration(circuitName, circuitDir, onStatus)
     return listOf(
@@ -438,22 +448,24 @@ private suspend fun benchmarkCircuitPrecomputed(
     context: Context,
     circuitName: String,
     onStatus: suspend (String) -> Unit
-): Pair<List<BenchmarkResult>, Boolean> {
+): List<BenchmarkResult> {
     val circuitDir = copyCircuitDir(context, circuitName)
 
     onStatus("Benchmarking $circuitName: precomputing…")
+    val start = SystemClock.elapsedRealtime()
     val precomputePath = precomputeProof(circuitDir.absolutePath)
+    val precomputeTimeMs = SystemClock.elapsedRealtime() - start
     if (precomputePath.isEmpty()) {
-        Log.e(TAG, "[$circuitName] precomputeProof returned empty path")
-        return emptyList<BenchmarkResult>() to true
+        throw BenchmarkException("precomputation failed")
     }
 
     val (generationResult, lastProof) =
         benchmarkPrecomputedGeneration(circuitName, circuitDir, precomputePath, onStatus)
     return listOf(
+        benchmarkResult(circuitName, "Precomputation", listOf(precomputeTimeMs)),
         generationResult,
         benchmarkVerification(circuitName, circuitDir, lastProof, onStatus)
-    ) to false
+    )
 }
 
 private suspend fun benchmarkGeneration(
@@ -474,6 +486,9 @@ private suspend fun benchmarkGeneration(
         val start = SystemClock.elapsedRealtime()
         lastProof = generateProof(circuitDir.absolutePath)
         proofTimesMs.add(SystemClock.elapsedRealtime() - start)
+        if (lastProof.isEmpty()) {
+            throw BenchmarkException("proof generation failed in run ${i + 1}")
+        }
     }
     return benchmarkResult(circuitName, "Proof generation", proofTimesMs) to lastProof
 }
@@ -497,6 +512,9 @@ private suspend fun benchmarkPrecomputedGeneration(
         val start = SystemClock.elapsedRealtime()
         lastProof = generateProofPrecomputed(circuitDir.absolutePath, precomputePath)
         precomputedTimesMs.add(SystemClock.elapsedRealtime() - start)
+        if (lastProof.isEmpty()) {
+            throw BenchmarkException("precomputed proof generation failed in run ${i + 1}")
+        }
     }
     return benchmarkResult(circuitName, "Proof generation (precomputed)", precomputedTimesMs) to lastProof
 }
@@ -517,8 +535,11 @@ private suspend fun benchmarkVerification(
         Log.d(TAG, "[$circuitName] verification run ${i + 1}/$BENCHMARK_ITERATIONS")
 
         val start = SystemClock.elapsedRealtime()
-        verify(circuitDir.absolutePath, proof)
+        val verified = verify(circuitDir.absolutePath, proof)
         verifyTimesMs.add(SystemClock.elapsedRealtime() - start)
+        if (!verified) {
+            throw BenchmarkException("proof verification failed in run ${i + 1}")
+        }
     }
     return benchmarkResult(circuitName, "Proof verification", verifyTimesMs)
 }
