@@ -135,7 +135,7 @@ dependencies = [
 [[package]]
 name = "algebra-utils"
 version = "0.1.0"
-source = "git+ssh://git@github.com/eid-privacy/spartan-backend#ffbbd372afd559d7e2c4a7f7ab26f4d87cee79cb"
+source = "git+ssh://git@github.com/eid-privacy/spartan-backend?branch=benchmark#d6b2e206ee32f16d089a9e080186aadfa3cb01a4"
 dependencies = [
  "num-bigint 0.5.1",
  "num-traits",
@@ -795,6 +795,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5d6cac793997bd970000024b2934968efe83b382de4fdcf4fcb46b6ee4ad996"
 dependencies = [
  "find-msvc-tools",
+ "jobserver",
+ "libc",
  "shlex",
 ]
 
@@ -2120,6 +2122,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "jobserver"
+version = "0.1.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c00acbd29eabad4a2392fa0e921c874934dbbf4194312ad20f04a0ed67a3cb3"
+dependencies = [
+ "getrandom 0.4.3",
+ "libc",
+]
+
+[[package]]
 name = "js-sys"
 version = "0.3.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2888,6 +2900,12 @@ dependencies = [
  "der 0.8.1",
  "spki 0.8.0",
 ]
+
+[[package]]
+name = "pkg-config"
+version = "0.3.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
 name = "plain"
@@ -3858,7 +3876,7 @@ dependencies = [
 [[package]]
 name = "spartan-backend"
 version = "0.1.0"
-source = "git+ssh://git@github.com/eid-privacy/spartan-backend#ffbbd372afd559d7e2c4a7f7ab26f4d87cee79cb"
+source = "git+ssh://git@github.com/eid-privacy/spartan-backend?branch=benchmark#d6b2e206ee32f16d089a9e080186aadfa3cb01a4"
 dependencies = [
  "acir",
  "acvm",
@@ -3879,6 +3897,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "vega-prover",
+ "zstd",
 ]
 
 [[package]]
@@ -4618,8 +4637,7 @@ checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
 [[package]]
 name = "vega-prover"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8691c2a88dbd870a24115593a27157c68a1c24c3e93a0223f7ca1dceb5631a9e"
+source = "git+https://github.com/eid-privacy/vega-prover?branch=raw-serde#6ca80d583cb3071f486bb19fb40f239755837709"
 dependencies = [
  "bellpepper",
  "bellpepper-core",
@@ -4648,6 +4666,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "tracing-subscriber",
+ "zstd",
 ]
 
 [[package]]
@@ -5145,3 +5164,31 @@ name = "zmij"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
+
+[[package]]
+name = "zstd"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf06bd8162af0734b344780deb55b42a2429ae430870d13fcc12f238e880fe6e"
+dependencies = [
+ "zstd-safe",
+]
+
+[[package]]
+name = "zstd-safe"
+version = "8.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae42c0555055784c70058d19ba8e275528e8a99a706684868ace5da4e716a4ab"
+dependencies = [
+ "zstd-sys",
+]
+
+[[package]]
+name = "zstd-sys"
+version = "2.1.0+zstd.1.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ef0a8027ec3ee71300ab3bcbcd0393f434aa72b91ca6d635a39941deae8eea0"
+dependencies = [
+ "cc",
+ "pkg-config",
+]
