@@ -45,6 +45,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
+import kotlin.math.roundToLong
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -252,31 +253,35 @@ fun BenchmarkSection(
             )
         }
 
-        results.forEach { result ->
-            Column(
-                modifier = Modifier.padding(start = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                Text(
-                    text = result.operation,
-                    style = MaterialTheme.typography.labelLarge
-                )
-                Text(
-                    text = "Runs: ${result.count}",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    text = "Shortest: ${result.minMs} ms",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    text = "Longest: ${result.maxMs} ms",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    text = "Average: %.2f ms".format(result.avgMs),
-                    style = MaterialTheme.typography.bodyMedium
-                )
+        // One column for all results, so that every block shares the same
+        // left edge instead of each block being centered on its own.
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            results.forEach { result ->
+                Column(
+                    modifier = Modifier.padding(start = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = result.operation,
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                    Text(
+                        text = "Runs: ${result.count}",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = "Shortest: ${result.minMs} ms",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = "Longest: ${result.maxMs} ms",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = "Average: %.2f ms".format(result.avgMs),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
         }
     }
@@ -460,13 +465,11 @@ private suspend fun benchmarkCircuitPrecomputed(
         throw BenchmarkException("precomputation failed")
     }
 
-    val (generationResult, lastProof) =
+    val (generationResults, lastProof) =
         benchmarkPrecomputedGeneration(circuitName, circuitDir, precomputePath, onStatus)
-    return listOf(
-        benchmarkResult(circuitName, "Precomputation", listOf(precomputeTimeMs)),
-        generationResult,
+    return listOf(benchmarkResult(circuitName, "Precomputation", listOf(precomputeTimeMs))) +
+        generationResults +
         benchmarkVerification(circuitName, circuitDir, lastProof, onStatus)
-    )
 }
 
 private suspend fun benchmarkGeneration(
@@ -499,10 +502,12 @@ private suspend fun benchmarkPrecomputedGeneration(
     circuitDir: File,
     precomputePath: String,
     onStatus: suspend (String) -> Unit
-): Pair<BenchmarkResult, String> {
+): Pair<List<BenchmarkResult>, String> {
     onStatus("Benchmarking $circuitName: precomputed generation…")
 
     val precomputedTimesMs = mutableListOf<Long>()
+    val loadTimesMs = mutableListOf<Long>()
+    val onlineTimesMs = mutableListOf<Long>()
     var lastProof = ""
     repeat(BENCHMARK_ITERATIONS) { i ->
         if ((i + 1) % PROGRESS_INTERVAL == 0) {
@@ -511,13 +516,20 @@ private suspend fun benchmarkPrecomputedGeneration(
         Log.d(TAG, "[$circuitName] precomputed proof run ${i + 1}/$BENCHMARK_ITERATIONS")
 
         val start = SystemClock.elapsedRealtime()
-        lastProof = generateProofPrecomputed(circuitDir.absolutePath, precomputePath)
+        val result = generateProofPrecomputed(circuitDir.absolutePath, precomputePath)
         precomputedTimesMs.add(SystemClock.elapsedRealtime() - start)
-        if (lastProof.isEmpty()) {
+        if (result.proof.isEmpty()) {
             throw BenchmarkException("precomputed proof generation failed in run ${i + 1}")
         }
+        lastProof = result.proof
+        loadTimesMs.add(result.loadMs.roundToLong())
+        onlineTimesMs.add(result.proveMs.roundToLong())
     }
-    return benchmarkResult(circuitName, "Proof generation (precomputed)", precomputedTimesMs) to lastProof
+    return listOf(
+        benchmarkResult(circuitName, "Proof generation (precomputed)", precomputedTimesMs),
+        benchmarkResult(circuitName, "precompute.bin load", loadTimesMs),
+        benchmarkResult(circuitName, "Online proving", onlineTimesMs)
+    ) to lastProof
 }
 
 private suspend fun benchmarkVerification(
@@ -611,13 +623,15 @@ private fun runGeneratePrecomputed(
     return try {
         val circuitDir = copyCircuitDir(context, circuitName)
         val start = SystemClock.elapsedRealtime()
-        val proof = generateProofPrecomputed(circuitDir.absolutePath, precomputePath)
+        val result = generateProofPrecomputed(circuitDir.absolutePath, precomputePath)
         val elapsed = SystemClock.elapsedRealtime() - start
 
-        if (proof.isNotEmpty()) {
-            val message = "Proof generated successfully in ${elapsed}ms"
+        if (result.proof.isNotEmpty()) {
+            val message = "Proof generated successfully in ${elapsed}ms " +
+                "(precompute.bin loaded in %.0fms, online proving %.0fms)"
+                    .format(result.loadMs, result.proveMs)
             Log.i(TAG, "[$circuitName] $message")
-            message to proof
+            message to result.proof
         } else {
             val message = "Proof generation failed"
             Log.e(TAG, "[$circuitName] generateProofPrecomputed returned empty proof")

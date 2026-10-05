@@ -5,11 +5,12 @@ use spartan_backend::{
     proof_to_base64,
     verify_circuit_from_base64,
     run_precompute,
-    prove_with_precompute,
+    precompute,
 };
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
+use std::time::Instant;
 use tracing_subscriber::fmt::MakeWriter;
 
 struct LogcatBridge;
@@ -100,19 +101,49 @@ pub fn generate_proof(pwd: String) -> String {
     }
 }
 
+/// Result of [`generate_proof_precomputed`]. `proof` is empty on failure.
+#[derive(uniffi::Record)]
+pub struct PrecomputedProof {
+    pub proof: String,
+    /// Time to read and decode `precompute.bin`, in milliseconds.
+    pub load_ms: f64,
+    /// Time of the online proving phase, in milliseconds.
+    pub prove_ms: f64,
+}
+
+/// Same as `spartan_backend::prove_with_precompute`, but measures the
+/// `precompute.bin` load and the online proving separately.
 #[uniffi::export]
-pub fn generate_proof_precomputed(pwd: String, path: String) -> String {
+pub fn generate_proof_precomputed(pwd: String, path: String) -> PrecomputedProof {
     init_logging();
     let dir = PathBuf::from(pwd);
     let circuit = instantiate_prover_circuit_from_dir(&dir);
-    let result = prove_with_precompute(&circuit, PathBuf::from(path));
+    let path = PathBuf::from(path);
+
+    let t_load = Instant::now();
+    let loaded = precompute::load(&circuit, path.clone());
+    let load_elapsed = t_load.elapsed();
+    tracing::info!(
+        "{}: read {} from disk in {:.3?}",
+        circuit.name,
+        path.display(),
+        load_elapsed
+    );
+    let load_ms = load_elapsed.as_secs_f64() * 1000.0;
+
+    let Some(mut prover) = loaded else {
+        tracing::error!("{}: no precomputed prover available", circuit.name);
+        return PrecomputedProof { proof: String::new(), load_ms, prove_ms: 0.0 };
+    };
+
+    let t_prove = Instant::now();
+    let result = prover.prove_online(&circuit);
+    let prove_ms = t_prove.elapsed().as_secs_f64() * 1000.0;
     match result {
-        Ok(proof) => {
-            proof
-        },
+        Ok(proof) => PrecomputedProof { proof: proof_to_base64(&proof), load_ms, prove_ms },
         Err(e) => {
-            tracing::error!("failed to generate proof: {}", e);
-            String::new()
+            tracing::error!("failed to generate proof: {:?}", e);
+            PrecomputedProof { proof: String::new(), load_ms, prove_ms }
         }
     }
 }

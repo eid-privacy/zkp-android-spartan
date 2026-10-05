@@ -8,6 +8,7 @@ uniffi = { version = "0.31", features = [ "cli" ] }
 spartan-backend = { git = "ssh://git@github.com/eid-privacy/spartan-backend", branch = "benchmark" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
+mimalloc = "0.1"
 # https://github.com/microsoft/vega-prover/blob/c0ee259053cd12eaf43ed71b5cde375452b3ee4d/Cargo.toml#L30
 
 [target.'cfg(target_os = "android")'.dependencies]

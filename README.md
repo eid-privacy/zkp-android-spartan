@@ -38,7 +38,7 @@ filesDir/circuits/<circuit>/          ← copied from assets/spartan-backend/cir
 |------|--------|--------------|
 | `precompute_proof(pwd) -> String` | `precomputeProof` | Runs the offline phase once, writes `<pwd>/target/precompute.bin`, and returns its path. Returns `""` on failure. |
 | `generate_proof(pwd) -> String` | `generateProof` | Generates a proof in one step (monolithic) and returns it as base64. Returns `""` on failure. |
-| `generate_proof_precomputed(pwd, path) -> String` | `generateProofPrecomputed` | Loads `precompute.bin` from `path`, runs only the online phase, and returns a base64 proof. Returns `""` on failure. |
+| `generate_proof_precomputed(pwd, path) -> PrecomputedProof` | `generateProofPrecomputed` | Loads `precompute.bin` from `path`, runs only the online phase, and returns a `PrecomputedProof` with the base64 `proof` (`""` on failure), the `precompute.bin` load time `load_ms` and the online proving time `prove_ms`. |
 | `verify(pwd, proof) -> Boolean` | `verify` | Verifies a base64 proof against the circuit's public inputs. |
 
 Every call loads the circuit from disk again: the prover calls read the ACIR and the witness, `verify` reads the ACIR and `verifier_input.json`. Rust panics reach Kotlin as exceptions. Rust logs appear in Logcat under the tag `noir_spartan`.
