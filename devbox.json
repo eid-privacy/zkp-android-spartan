@@ -8,7 +8,8 @@
     "gcc@latest",
     "pkg-config@latest",
     "openssl@latest",
-    "cmake@latest"
+    "cmake@latest",
+    "cargo-ndk@latest"
   ],
   "env": {
     "CARGO_NET_GIT_FETCH_WITH_CLI": "true"
@@ -21,20 +22,40 @@
       "export ANDROID_NDK_HOME=$(ls -d $ANDROID_HOME/ndk/* 2>/dev/null | sort -V | tail -1)",
       "export PATH=\"$HOME/.cargo/bin:$PATH\"",
       "export PKG_CONFIG_PATH=\"$DEVBOX_PACKAGES_DIR/lib/pkgconfig:$PKG_CONFIG_PATH\"",
-      "rustup default stable >/dev/null 2>&1 || rustup toolchain install stable"
+      "rustup default stable >/dev/null 2>&1 || rustup toolchain install stable",
+      "rustup target add aarch64-linux-android x86_64-linux-android >/dev/null 2>&1"
     ],
     "scripts": {
-      "cargo":             ["cargo \"$@\""],
-      "rust_build":        ["cd noir_spartan && cargo build --release"],
-      "gen_bindings":      ["cd noir_spartan && cargo run --bin uniffi-bindgen generate --no-format --library ./target/release/libnoir_spartan.$([ \"$(uname)\" = Darwin ] && echo dylib || echo so) --language kotlin --out-dir ../app/src/main/java/com/example/zkp_android_spartan/"],
-      "ndk_build":         ["cd noir_spartan && cargo ndk -t arm64-v8a -t x86_64 -o ../app/src/main/jniLibs build --release"],
-      "gradle":            ["./gradlew \"$@\""],
-      "build_apk":         ["./gradlew :app:assembleDebug"],
-      "install_apk":       ["$ANDROID_HOME/platform-tools/adb install -r app/build/outputs/apk/debug/app-debug.apk"],
-      "launch_app":        ["$ANDROID_HOME/platform-tools/adb shell am start -n com.example.zkp_android_spartan/.MainActivity"],
-      "ensure_avd":        ["bash scripts/ensure_avd.sh \"${1:-Pixel_9}\""],
-      "emulator":          ["bash scripts/ensure_avd.sh \"${1:-Pixel_9}\"", "$ANDROID_HOME/emulator/emulator -avd \"${1:-Pixel_9}\" &"],
-      "emulator-headless": ["bash scripts/ensure_avd.sh \"${1:-Pixel_9}\"", "$ANDROID_HOME/emulator/emulator -avd \"${1:-Pixel_9}\" -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect &"]
+      "compile_circuits": ["bash scripts/compile_circuits.sh"],
+      "rust_build": ["cd noir_spartan && cargo build --release"],
+      "gen_bindings": [
+        "cd noir_spartan && cargo run --bin uniffi-bindgen generate --no-format --library ./target/release/libnoir_spartan.$([ \"$(uname)\" = Darwin ] && echo dylib || echo so) --language kotlin --out-dir ../app/src/main/java/com/example/zkp_android_spartan/"
+      ],
+      "ndk_build": [
+        "cd noir_spartan && cargo ndk -t arm64-v8a $([ \"$(uname -m)\" = x86_64 ] && echo '-t x86_64') -o ../app/src/main/jniLibs build --release"
+      ],
+      "build_apk": ["./gradlew :app:assembleDebug"],
+      "ensure_avd": ["bash scripts/ensure_avd.sh \"${1:-Pixel_9}\""],
+      "emulator": [
+        "bash scripts/ensure_avd.sh \"${1:-Pixel_9}\"",
+        "$ANDROID_HOME/emulator/emulator -avd \"${1:-Pixel_9}\" -memory \"${AVD_RAM_MB:-8192}\" &"
+      ],
+      "emulator-headless": [
+        "bash scripts/ensure_avd.sh \"${1:-Pixel_9}\"",
+        "$ANDROID_HOME/emulator/emulator -avd \"${1:-Pixel_9}\" -memory \"${AVD_RAM_MB:-8192}\" -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect &"
+      ],
+      "install_apk": [
+        "$ANDROID_HOME/platform-tools/adb install -r app/build/outputs/apk/debug/app-debug.apk"
+      ],
+      "launch_app": [
+        "$ANDROID_HOME/platform-tools/adb shell pm path com.example.zkp_android_spartan >/dev/null 2>&1 || $ANDROID_HOME/platform-tools/adb install -r app/build/outputs/apk/debug/app-debug.apk",
+        "$ANDROID_HOME/platform-tools/adb shell am start -n com.example.zkp_android_spartan/.MainActivity"
+      ],
+      "logcat": [
+        "PID=$($ANDROID_HOME/platform-tools/adb shell pidof -s com.example.zkp_android_spartan); if [ -n \"$PID\" ]; then $ANDROID_HOME/platform-tools/adb logcat --pid=$PID \"$@\"; else echo 'App not running, showing full logcat' >&2; $ANDROID_HOME/platform-tools/adb logcat \"$@\"; fi"
+      ],
+      "cargo":      ["cargo \"$@\""],
+      "gradle":    ["./gradlew \"$@\""]
     }
   }
 }

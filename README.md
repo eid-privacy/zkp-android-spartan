@@ -67,10 +67,9 @@ Use the **Menu** at the top left to switch pages:
 ### One-time setup
 
 ```bash
-git submodule update --init             # circuit assets
-devbox install                          # toolchain from devbox.json
-devbox run cargo install cargo-ndk
-devbox run rustup target add x86_64-linux-android aarch64-linux-android
+git submodule update --init             # circuit sources
+devbox run compile_circuits             # compile them with nargo-t256; target/ is not versioned in the submodule
+devbox install                          # toolchain from devbox.json, incl. cargo-ndk; the init_hook adds the Android Rust targets
 ```
 
 You also need:
@@ -85,11 +84,11 @@ The Kotlin bindings and the `.so` libraries are generated and git-ignored. Run a
 ```bash
 devbox run rust_build      # host build; uniffi-bindgen reads the API from this library (.dylib on macOS, .so on Linux); the first build is slow
 devbox run gen_bindings    # → app/src/main/java/.../uniffi/noir_spartan/noir_spartan.kt
-devbox run ndk_build       # → app/src/main/jniLibs/{arm64-v8a,x86_64}/libnoir_spartan.so
+devbox run ndk_build       # → app/src/main/jniLibs/arm64-v8a/libnoir_spartan.so (+ x86_64/ on x86_64 hosts)
 devbox run build_apk       # ./gradlew :app:assembleDebug (Gradle does not build the Rust code)
 ```
 
-To run on an emulator (x86_64) or a device (arm64-v8a):
+To run on an emulator (same ABI as the host) or a device (arm64-v8a):
 
 ```bash
 devbox run emulator        # or emulator-headless

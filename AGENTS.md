@@ -45,7 +45,7 @@ zkp-android-spartan/
 │       │   │   └── ui/theme/                # Compose Material3 theme files
 │       │   ├── jniLibs/                     # Pre-built native libraries (gitignored)
 │       │   │   ├── arm64-v8a/libnoir_spartan.so
-│       │   │   └── x86_64/libnoir_spartan.so
+│       │   │   └── x86_64/libnoir_spartan.so   # only built on x86_64 hosts
 │       │   └── res/                         # Android resources
 │       ├── test/                            # Unit tests
 │       └── androidTest/                     # Instrumented tests
@@ -102,7 +102,7 @@ cd noir_spartan
 cargo ndk -t arm64-v8a -t x86_64 -o ../app/src/main/jniLibs build --release
 ```
 
-The command writes the `.so` files directly into `app/src/main/jniLibs/`. The app currently ships `arm64-v8a` and `x86_64` binaries. Adjust targets as needed. Because UniFFI embeds a per-function checksum in both the generated Kotlin and the loaded native library, the Kotlin bindings and `jniLibs/.so` must always come from the same build.
+The command writes the `.so` files directly into `app/src/main/jniLibs/`. `devbox run ndk_build` always builds `arm64-v8a` and adds `x86_64` only on x86_64 hosts: `vega-prover` enables `halo2curves`' `asm` feature for x86_64 targets, and the `halo2curves` build script checks the *host* architecture, so the x86_64 build fails on arm64 hosts (Apple Silicon) with "Currently feature `asm` can only be enabled on x86_64 arch." Emulators on arm64 hosts are arm64, so that slice is not needed there. Because UniFFI embeds a per-function checksum in both the generated Kotlin and the loaded native library, the Kotlin bindings and `jniLibs/.so` must always come from the same build.
 
 ### Spartan backend and circuits
 
@@ -128,25 +128,27 @@ See `app/src/main/assets/spartan-backend/preprocessing/README.md` for the tool-t
 
 The toolchain (Rust, JDK 17, Android platform tools, gcc/cmake) is pinned per-project with **devbox + nix** rather than global installs, via `devbox.json` at the repo root. Every command below runs inside the devbox environment (prefix with `devbox run`, or open a shell with `devbox shell`). The `init_hook` detects the OS and sets `ANDROID_HOME` (`$HOME/Android` on Linux, `$HOME/Library/Android/sdk` on macOS), sets `ANDROID_SDK_ROOT`, `JAVA_HOME`, and `ANDROID_NDK_HOME` (auto-detected from `$ANDROID_HOME/ndk/*`), puts `~/.cargo/bin` on `PATH`, sets `PKG_CONFIG_PATH`, runs `rustup default stable`, and exports `CARGO_NET_GIT_FETCH_WITH_CLI=true` (cargo's built-in libgit2 cannot authenticate to the `ssh://git@github.com` dependencies, so it must shell out to the git CLI).
 
-Prerequisites once per clone: `git submodule update --init` (pulls the `spartan-backend` assets), `devbox install`, and `rustup target add x86_64-linux-android aarch64-linux-android` plus `cargo install cargo-ndk`. Ensure `local.properties` has `sdk.dir=/home/ubuntu/Android` (the complete SDK; `/opt/android` is a stub).
+Prerequisites once per clone: `git submodule update --init` (pulls the `spartan-backend` assets), `devbox run compile_circuits` (generates the circuit `target/` artifacts, which the submodule no longer versions), and `devbox install` (`cargo-ndk` is a devbox package, and the devbox `init_hook` installs the `aarch64-linux-android` and `x86_64-linux-android` Rust targets). Ensure `local.properties` has `sdk.dir=/home/ubuntu/Android` (the complete SDK; `/opt/android` is a stub).
 
 Devbox scripts (`devbox run <name>`):
 
 ```bash
-devbox run cargo <args>       # pass-through to cargo
+devbox run compile_circuits   # nargo-t256 compile + execute the benchmark circuits in the submodule (scripts/compile_circuits.sh, uses the submodule's devbox)
 devbox run rust_build         # cargo build --release in noir_spartan (host libnoir_spartan.so)
 devbox run gen_bindings       # regenerate the UniFFI Kotlin bindings (uses --no-format; ktlint is not installed; picks libnoir_spartan.dylib on macOS, .so elsewhere)
-devbox run ndk_build          # cargo ndk build .so for arm64-v8a + x86_64 directly into app/src/main/jniLibs
-devbox run gradle <args>      # pass-through to ./gradlew
+devbox run ndk_build          # cargo ndk build .so for arm64-v8a (+ x86_64 on x86_64 hosts) directly into app/src/main/jniLibs
 devbox run build_apk          # ./gradlew :app:assembleDebug
-devbox run install_apk        # adb install -r the debug APK
-devbox run launch_app         # adb am start the MainActivity
 devbox run ensure_avd         # create the Pixel_9 AVD if missing (scripts/ensure_avd.sh)
-devbox run emulator           # ensure_avd, then start Pixel_9 windowed
-devbox run emulator-headless  # ensure_avd, then start Pixel_9 with -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
+devbox run emulator           # ensure_avd, then start Pixel_9 windowed with 8 GB RAM (-memory, override with AVD_RAM_MB)
+devbox run emulator-headless  # ensure_avd, then start Pixel_9 with 8 GB RAM, -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
+devbox run install_apk        # adb install -r the debug APK
+devbox run launch_app         # adb am start the MainActivity (installs the APK first if missing)
+devbox run logcat             # adb logcat filtered to the app's PID (full logcat if the app is not running); extra args go to adb logcat
+devbox run cargo <args>       # pass-through to cargo
+devbox run gradle <args>      # pass-through to ./gradlew
 ```
 
-The generated bindings (`app/src/main/java/.../uniffi/`) and native libs (`app/src/main/jniLibs/`) are **git-ignored**, so a fresh clone must run `gen_bindings` and `ndk_build` before the app will compile and run. The emulator is x86_64, so `ndk_build`'s x86_64 output is what gets exercised on it; the arm64-v8a slice is for physical devices.
+The generated bindings (`app/src/main/java/.../uniffi/`) and native libs (`app/src/main/jniLibs/`) are **git-ignored**, so a fresh clone must run `gen_bindings` and `ndk_build` before the app will compile and run. `ensure_avd.sh` picks the emulator ABI matching the host: on x86_64 Linux the emulator runs the x86_64 slice, on Apple Silicon it runs the arm64-v8a slice, which is also what physical devices use.
 
 End-to-end run on the emulator:
 
@@ -178,11 +180,12 @@ Two host-specific build workarounds:
 - The Android app is a menu-driven Compose screen with vertically scrollable content. A collapsible dropdown **Menu** switches between a **Benchmarks** page and one page per benchmark circuit. Only the circuits listed in `BENCHMARK_CIRCUITS` (`c0200_swiyu_jwt`, `c0202_sicpa_backend_constant`) that actually exist under `assets/spartan-backend/circuits/` are shown — the app no longer surfaces every circuit directory. Each circuit page has **Precompute proof**, **Generate proof (precomputed)**, **Generate proof**, and **Verify proof** buttons; **Generate proof (precomputed)** is enabled only after a successful precomputation, and **Verify proof** only after a proof has been generated.
 - The **Benchmarks** page has two buttons per circuit: *generation + verification* (100 × `generateProof`, then 100 × `verify`) and *precomputed generation + verification* (1 × timed `precomputeProof`, 100 × `generateProofPrecomputed`, 100 × `verify`), reporting Runs/Shortest/Longest/Average per operation. Every call's result is checked; a failure aborts the benchmark with an error status instead of reporting timings of failed runs. `prove_circuit` never reads `precompute.bin`, so the monolithic benchmark is unaffected by a leftover artifact. Timings are per UniFFI call and include circuit loading from disk (and, for the precomputed path, reading `precompute.bin`). The benchmark coroutine is scoped to the Benchmarks pager page, so switching pages cancels it.
 - Not every directory under `assets/spartan-backend/circuits/` is a standalone provable circuit (e.g. `c9000_benchmark/` has no `target/` artifacts or `Prover.toml`, and `eid/` is a shared Noir library used by `c0200_swiyu_jwt`). This is why the app only surfaces the curated `BENCHMARK_CIRCUITS` list instead of auto-discovering every directory.
+- The prover needs well over 2 GB of RAM. With the emulator's default 2.5 GB, Android's low-memory killer kills the app during proof generation (`lowmemorykiller: Kill 'com.example.zkp_android_spartan' ...`, no Java or native crash). The devbox emulator scripts therefore pass `-memory ${AVD_RAM_MB:-8192}`. Setting `hw.ramSize` in the AVD's `config.ini` does not work: emulator 36.6.11 ignores it and logs `Increasing RAM size to 2560MB`.
 - The vendored `spartan-backend` is a large Rust codebase that pulls in a forked Noir compiler/toolchain; initial builds can be slow.
-- Circuit target artifacts (`circuits/*/target/`) are intentionally versioned in the submodule because the generated ACIR bytecode is part of the tracked backend test corpus.
-- For circuit compilation from source, use the `nargo-t256` build of the `eid-privacy/noir` fork at tag `t256-v0.26-1`.
+- Circuit target artifacts (`circuits/*/target/`) are **not** versioned in the submodule anymore (since submodule commit `040e23c`), even though the submodule README still says otherwise. Without them the app finds no circuits (`CircuitDebug: Number of circuits found: 0`) and the Benchmarks page shows only its title. Run `devbox run compile_circuits` after checking out or updating the submodule, then rebuild and reinstall the APK.
+- `compile_circuits` uses the `nargo-t256` pinned by the submodule's own `devbox.json`. A `devbox run -- bash -c '...'` one-liner loses `$variables` because devbox re-quotes its arguments, which is why the logic lives in a script file.
 - The `noir_spartan` crate depends on `spartan-backend` via an SSH Git URL (`ssh://git@github.com/eid-privacy/spartan-backend`), not via the local submodule path; building `noir_spartan` therefore requires SSH access to the `eid-privacy/spartan-backend` repository. (A developer-local path override may be used — see the Technology Stack section.)
-- The `spartan-backend` submodule is pinned at commit `205442b25c0a02da907e8eb6bce454ff6e0a7006`, while the committed `noir_spartan/Cargo.lock` resolves the `spartan-backend` git dependency to commit `ffbbd372afd559d7e2c4a7f7ab26f4d87cee79cb`. These are updated independently, so the vendored code under `assets/spartan-backend/` is not guaranteed to match the code linked into the Android library.
+- The `spartan-backend` submodule is pinned at commit `d6b2e206ee32f16d089a9e080186aadfa3cb01a4` (branch `benchmark`), and the committed `noir_spartan/Cargo.lock` currently resolves the `spartan-backend` git dependency to the same commit. The two are updated independently, so if they drift apart the vendored code under `assets/spartan-backend/` is not guaranteed to match the code linked into the Android library.
 - If you change any `#[uniffi::export]` API (for example, `precompute_proof` was recently changed from `-> bool` to `-> String` and `generate_proof_precomputed` gained an explicit path argument), remember to (1) rebuild `target/release/libnoir_spartan.so`, (2) regenerate the Kotlin bindings, and (3) rebuild the Android `jniLibs/.so` files. The Android Kotlin layer must then be updated to match the new signature (`String` stays `String`; `Vec<u8>` becomes `kotlin.ByteArray`).
 
 ## License
