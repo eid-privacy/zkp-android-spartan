@@ -30,7 +30,6 @@ filesDir/circuits/<circuit>/          ← copied from assets/spartan-backend/cir
 | `noir_spartan/` | Rust crate that wraps `spartan-backend` and exports it to Kotlin. |
 | `app/src/main/assets/spartan-backend/` | Git submodule of `spartan-backend`. The app only uses its `circuits/` directory as assets; the Rust code linked into the app comes from the git dependency in `noir_spartan/Cargo.toml`. |
 | `devbox.json` | Pinned toolchain (Rust, JDK 17, Android tools) plus helper scripts. |
-| `benchmarks/<device>/zkp.log` | Raw benchmark logs (logcat, filtered). |
 | `scripts/ensure_avd.sh` | Creates the `Pixel_9` emulator if it is missing. |
 
 ## The Rust API (`noir_spartan`)
@@ -112,51 +111,24 @@ The submodule does not contain the compiled `target/` artifacts, so run `devbox 
 
 ## Benchmarks
 
-Measured on a **Fairphone 4** (Snapdragon 750G) on 2026-09-29, with 5 runs per step. The table shows the
-average of two sessions in ms. Every time includes loading the circuit files from flash, see
-[What the timings include](#using-the-app). The raw log is
-[`benchmarks/FairPhone4/zkp.log`](benchmarks/FairPhone4/zkp.log).
+The final numbers are in the
+[MS4 report](https://github.com/eid-privacy/zkp-reports/releases/latest/download/eid_privacy-101.292-IP-ICT-ms4-report.pdf),
+section *Benchmarks* (table "Benchmarking our circuits for age-proof"). They were measured on a **Samsung Galaxy A54**
+(Android 16, 8 GB RAM) with circuit `c0200_swiyu_jwt`:
 
-| Step | `c0200_swiyu_jwt` | `c0202_sicpa_backend_constant` |
-|------|------------------:|-------------------------------:|
-| Proof generation (monolithic) | 11 866 | 15 472 |
-| Precomputation (offline, once) | 18 523 | 18 709 |
-| Proof generation (precomputed, online) | 9 481 | 11 854 |
-| Proof verification | 8 493 | 10 007 |
+| Prover | Galaxy A54 |
+|--------|-----------:|
+| Spartan (monolithic) | 11.0 s |
+| Spartan, pre-computed (online phase) | 4.5 s (load 0.4 s, final 3.4 s) |
+| Pre-computation (offline, once per credential) | about 18 s |
 
-The log predates the `precompute.bin` load time / online proving time split (`load_ms`, `prove_ms`), so the
-precomputed row still includes reading `precompute.bin`. It was recorded with spartan-backend commit `d6b2e20`,
-which has the same prover code as `v1.0.0`.
-
-To reproduce the log file, execute in the project root
+To measure on your own device, build and install the app (see [Building](#building)) and open the **Benchmarks**
+page. The app times every call itself, and Rust reports the `precompute.bin` load time and the online proving time
+separately. The results appear on the page and in Logcat under the tag `ZKP`:
 
 ```bash
-./gradlew installDebug
+devbox run logcat -s ZKP
 ```
-
-to build the Android app.
-
-Make sure that your device is connected and run
-
-```bash
-adb logcat > "$(date -I).log"
-```
-
-to capture the log output. Finally, execute in a separate shell
-
-```
-adb shell am start -n com.example.zkp_android_spartan/.MainActivity
-```
-
-to load the Android app to the device and run it. You can then execute any desired benchmarks manually.
-
-To extract the relevant logs, use
-
-```bash
-grep -E 'ZKP|noir_spartan' $(date -I).log > benchmarks/<device>/zkp.log
-```
-
-and can then use the resulting log file for further processing (e.g. `grep -vE  'spartan_backend::precompute|circuit_instance|vega_prover' benchmarks/<device>/zkp.log` to get the only logs related to the benchmarks directly).
 
 ## License
 

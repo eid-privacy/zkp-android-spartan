@@ -17,7 +17,6 @@ zkp-android-spartan/
 ├── AGENTS.md              # This file
 ├── README.md              # Human-oriented project overview
 ├── LICENSE                # Mozilla Public License 2.0
-├── benchmarks/            # Raw benchmark logs, one directory per device (FairPhone4/zkp.log)
 ├── .gitignore             # Excludes generated Rust targets, jniLibs, UniFFI bindings, local.properties
 ├── .gitmodules            # Defines the spartan-backend Git submodule
 ├── build.gradle.kts       # Root Gradle build file
