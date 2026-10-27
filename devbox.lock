@@ -39,6 +39,54 @@
         }
       }
     },
+    "cargo-ndk@latest": {
+      "last_modified": "2026-10-02T22:55:44Z",
+      "resolved": "github:NixOS/nixpkgs/55ba7f49ef2962b42cbd126522b7df5f95037679#cargo-ndk",
+      "source": "devbox-search",
+      "version": "4.1.2",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/icg1srkbm7ralsz2mxrqmk9k0dgl6py1-cargo-ndk-4.1.2",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/icg1srkbm7ralsz2mxrqmk9k0dgl6py1-cargo-ndk-4.1.2"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/2cb4qhr1ng5m964942jn272pd6dxak3r-cargo-ndk-4.1.2",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/2cb4qhr1ng5m964942jn272pd6dxak3r-cargo-ndk-4.1.2"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/pyp8006lkgfn09pf1vnxp5839mgs5k9b-cargo-ndk-4.1.2",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/pyp8006lkgfn09pf1vnxp5839mgs5k9b-cargo-ndk-4.1.2"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/c7rs4981qgzmqp0p10nlxjsh7nf2zzb3-cargo-ndk-4.1.2",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/c7rs4981qgzmqp0p10nlxjsh7nf2zzb3-cargo-ndk-4.1.2"
+        }
+      }
+    },
     "cmake@latest": {
       "last_modified": "2025-11-23T21:50:36Z",
       "resolved": "github:NixOS/nixpkgs/ee09932cedcef15aaf476f9343d1dea2cb77e261#cmake",
