@@ -112,21 +112,32 @@ The submodule does not contain the compiled `target/` artifacts, so run `devbox 
 
 ## Benchmarks
 
-Measured on a **Fairphone 4** (Snapdragon 750G) on 2026-09-29, with 5 runs per step. The table shows the
-average of two sessions in ms. Every time includes loading the circuit files from flash, see
-[What the timings include](#using-the-app). The raw log is
-[`benchmarks/FairPhone4/zkp.log`](benchmarks/FairPhone4/zkp.log).
+The final numbers are in the
+[MS4 report](https://github.com/eid-privacy/zkp-reports/releases/latest/download/eid_privacy-101.292-IP-ICT-ms4-report.pdf),
+section *Benchmarks* (table "Benchmarking our circuits for age-proof"). They were measured on a **Samsung Galaxy A54**
+(Android 16, 8 GB RAM) with circuit `c0200_swiyu_jwt`:
+
+| Prover | Galaxy A54 |
+|--------|-----------:|
+| Spartan (monolithic) | 11.0 s |
+| Spartan, pre-computed (online phase) | 4.5 s (load 0.4 s, final 3.4 s) |
+| Pre-computation (offline, once per credential) | about 18 s |
+
+### Earlier run (raw log)
+
+[`benchmarks/GalaxyA54/zkp.log`](benchmarks/GalaxyA54/zkp.log) is an earlier run on the same phone, from 2026-09-29,
+with 5 runs per step. It predates the speed-ups of 2026-10-04 and 2026-10-05: the faster `precompute.bin` loading
+(spartan-backend, `vega-prover` branch `raw-serde`) and the switch to `mimalloc`. So the pre-computed proof is still
+much slower than in the report. It also predates the split into load time and online proving time
+(`load_ms`, `prove_ms`). The table shows the averages of the two sessions in the log, in ms. Every time includes
+loading the circuit files, see [What the timings include](#using-the-app).
 
 | Step | `c0200_swiyu_jwt` | `c0202_sicpa_backend_constant` |
 |------|------------------:|-------------------------------:|
 | Proof generation (monolithic) | 11 866 | 15 472 |
 | Precomputation (offline, once) | 18 523 | 18 709 |
-| Proof generation (precomputed, online) | 9 481 | 11 854 |
+| Proof generation (precomputed, online, incl. loading `precompute.bin`) | 9 481 | 11 854 |
 | Proof verification | 8 493 | 10 007 |
-
-The log predates the `precompute.bin` load time / online proving time split (`load_ms`, `prove_ms`), so the
-precomputed row still includes reading `precompute.bin`. It was recorded with spartan-backend commit `d6b2e20`,
-which has the same prover code as `v1.0.0`.
 
 To reproduce the log file, execute in the project root
 
