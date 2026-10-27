@@ -1,0 +1,47 @@
+{
+  "title": "zkp-android-spartan: Spartan proofs for e-ID on Android",
+  "upload_type": "software",
+  "description": "Experimental Android app that generates and verifies zero-knowledge proofs on the phone with the Spartan backend for Noir over Tom-256 (eid-privacy/spartan-backend), called from Kotlin through UniFFI. It benchmarks proof generation (with and without precomputation) and verification for the e-ID circuits c0200_swiyu_jwt (age proof on a SWIYU SD-JWT with holder binding) and c0202_sicpa_backend_constant. These are the mobile numbers of the final report of the grant.",
+  "creators": [
+    {
+      "name": "Dengler, Carine",
+      "affiliation": "EPFL"
+    },
+    {
+      "name": "Gasser, Linus",
+      "affiliation": "EPFL"
+    }
+  ],
+  "license": "MPL-2.0",
+  "access_right": "open",
+  "keywords": [
+    "zero-knowledge proofs",
+    "Spartan",
+    "Noir",
+    "Android",
+    "mobile",
+    "benchmarks",
+    "SD-JWT",
+    "e-ID",
+    "swiyu"
+  ],
+  "notes": "Funded by Innosuisse, grant 101.292 IP-ICT \"Secure and Privacy-Preserving Credentials for E-ID\", a collaboration between EPFL / C4DT and SICPA SA. Research / demo code, not for production use.",
+  "communities": [
+    {
+      "identifier": "eid-privacy"
+    }
+  ],
+  "related_identifiers": [
+    {
+      "relation": "isSupplementTo",
+      "resource_type": "publication-report",
+      "identifier": "10.5281/zenodo.23694204",
+      "scheme": "doi"
+    },
+    {
+      "relation": "requires",
+      "resource_type": "software",
+      "identifier": "https://github.com/eid-privacy/spartan-backend"
+    }
+  ]
+}
