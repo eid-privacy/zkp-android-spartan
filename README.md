@@ -112,7 +112,7 @@ The submodule does not contain the compiled `target/` artifacts, so run `devbox 
 ## Benchmarks
 
 The final numbers are in the
-[MS4 report](https://github.com/eid-privacy/zkp-reports/releases/latest/download/eid_privacy-101.292-IP-ICT-ms4-report.pdf),
+[MS4 report](https://github.com/eid-privacy/zkp-reports/releases/latest/download/eid-privacy-MS4.pdf),
 section *Benchmarks* (table "Benchmarking our circuits for age-proof"). They were measured on a **Samsung Galaxy A54**
 (Android 16, 8 GB RAM) with circuit `c0200_swiyu_jwt`:
 
