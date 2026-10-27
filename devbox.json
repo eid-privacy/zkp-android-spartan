@@ -11,9 +11,6 @@
     "cmake@latest",
     "cargo-ndk@latest"
   ],
-  "env": {
-    "CARGO_NET_GIT_FETCH_WITH_CLI": "true"
-  },
   "shell": {
     "init_hook": [
       "if [ \"$(uname)\" = \"Darwin\" ]; then export ANDROID_HOME=$HOME/Library/Android/sdk; else export ANDROID_HOME=$HOME/Android; fi",

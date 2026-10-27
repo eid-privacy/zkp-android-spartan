@@ -2,7 +2,9 @@
 
 An experimental Android app that generates and verifies zero-knowledge proofs (ZKP) on the phone. Circuits are written in [Noir](https://noir-lang.org/) and proved with a [Spartan2](https://github.com/microsoft/Spartan)-style backend ([`eid-privacy/spartan-backend`](https://github.com/eid-privacy/spartan-backend)). The proving code is Rust, and the app calls it from Kotlin through [UniFFI](https://mozilla.github.io/uniffi-rs/).
 
-The main purpose of the app is to **benchmark proof generation and verification on Android** for the eID circuits `c0200_swiyu_jwt` and `c0202_sicpa_backend_constant`.
+The main purpose of the app is to **benchmark proof generation and verification on Android** for the eID circuits `c0200_swiyu_jwt` and `c0202_sicpa_backend_constant`. Results are in [Benchmarks](#benchmarks).
+
+> **Demo code.** This is research code from the [eid-privacy](https://github.com/eid-privacy) project. It has not been audited and must not be used in production.
 
 ## How it fits together
 
@@ -16,7 +18,7 @@ uniffi/noir_spartan/noir_spartan.kt   ← generated Kotlin bindings (not committ
 jniLibs/<abi>/libnoir_spartan.so      ← built from noir_spartan/ (not committed)
       │
       ▼
-spartan-backend (Rust, fetched by cargo over SSH)
+spartan-backend (Rust, fetched by cargo, tag v1.0.0)
       │  reads circuit files from
       ▼
 filesDir/circuits/<circuit>/          ← copied from assets/spartan-backend/circuits/
@@ -28,6 +30,7 @@ filesDir/circuits/<circuit>/          ← copied from assets/spartan-backend/cir
 | `noir_spartan/` | Rust crate that wraps `spartan-backend` and exports it to Kotlin. |
 | `app/src/main/assets/spartan-backend/` | Git submodule of `spartan-backend`. The app only uses its `circuits/` directory as assets; the Rust code linked into the app comes from the git dependency in `noir_spartan/Cargo.toml`. |
 | `devbox.json` | Pinned toolchain (Rust, JDK 17, Android tools) plus helper scripts. |
+| `benchmarks/<device>/zkp.log` | Raw benchmark logs (logcat, filtered). |
 | `scripts/ensure_avd.sh` | Creates the `Pixel_9` emulator if it is missing. |
 
 ## The Rust API (`noir_spartan`)
@@ -55,8 +58,8 @@ Use the **Menu** at the top left to switch pages:
 
   Each button shows whether it succeeded and how long it took.
 - **Benchmarks**: each circuit has two buttons.
-  - *Benchmark (generation + verification)*: 100 × `generateProof`, then 100 × `verify` on the last proof.
-  - *Benchmark (precomputed generation + verification)*: 1 × `precomputeProof`, then 100 × `generateProofPrecomputed`, then 100 × `verify`.
+  - *Benchmark (generation + verification)*: 5 × `generateProof`, then 5 × `verify` on the last proof.
+  - *Benchmark (precomputed generation + verification)*: 1 × `precomputeProof`, then 5 × `generateProofPrecomputed`, then 5 × `verify`.
 
   The results show the number of runs and the shortest, longest and average time for each step. A benchmark stops with an error as soon as a call fails, so failed runs never show up as timings.
 
@@ -75,7 +78,6 @@ devbox install                          # toolchain from devbox.json, incl. carg
 You also need:
 
 - An Android SDK, including an NDK. `devbox.json` expects it in `~/Library/Android/sdk` on macOS and `~/Android` on Linux. Point `local.properties` at it with `sdk.dir=...`.
-- SSH access to `git@github.com:eid-privacy/spartan-backend`, because cargo fetches the backend over SSH. `devbox.json` sets `CARGO_NET_GIT_FETCH_WITH_CLI=true` so that cargo uses your SSH setup.
 
 ### Build and run
 
@@ -100,17 +102,33 @@ Look at `devbox.json` for the exact commands behind each script, for example to 
 
 ### Circuits
 
-The circuits ship with their compiled `target/` artifacts, so you do not have to compile them to run the app. To rebuild them, or to run the backend on its own, see `app/src/main/assets/spartan-backend/README.md`. The short version: from `app/src/main/assets/spartan-backend/`, `devbox run build` builds the backend and `devbox run start` compiles the circuits and runs them. Circuits are compiled with the `nargo-t256` fork of Noir (tag `t256-v0.26-1`).
+The submodule does not contain the compiled `target/` artifacts, so run `devbox run compile_circuits` (see [One-time setup](#one-time-setup)) before building the APK. Without them the app finds no circuits. To compile by hand, or to run the backend on its own, see `app/src/main/assets/spartan-backend/README.md`. The short version: from `app/src/main/assets/spartan-backend/`, `devbox run build` builds the backend and `devbox run start` compiles the circuits and runs them. Circuits are compiled with the `nargo-t256` fork of Noir (tag `t256-v0.26-1`).
 
 ## Known limitations
 
-- The submodule commit and the `spartan-backend` commit pinned in `noir_spartan/Cargo.lock` are updated separately. If they drift apart, the circuit assets may not match the prover.
+- The submodule and the `spartan-backend` dependency in `noir_spartan/Cargo.toml` both point at the tag `v1.0.0`, but they are updated separately. If they drift apart, the circuit assets may not match the prover.
 - Only the two benchmark circuits appear in the app. Other circuits in the submodule are exercised through the standalone backend.
 - The app does not preserve its state: after the app is killed, or after leaving the Benchmarks page, you have to precompute or benchmark again.
 
 ## Benchmarks
 
-To reproduce the `zkp.log` file, execute in the project root
+Measured on a **Fairphone 4** (Snapdragon 750G) on 2026-09-29, with 5 runs per step. The table shows the
+average of two sessions in ms. Every time includes loading the circuit files from flash, see
+[What the timings include](#using-the-app). The raw log is
+[`benchmarks/FairPhone4/zkp.log`](benchmarks/FairPhone4/zkp.log).
+
+| Step | `c0200_swiyu_jwt` | `c0202_sicpa_backend_constant` |
+|------|------------------:|-------------------------------:|
+| Proof generation (monolithic) | 11 866 | 15 472 |
+| Precomputation (offline, once) | 18 523 | 18 709 |
+| Proof generation (precomputed, online) | 9 481 | 11 854 |
+| Proof verification | 8 493 | 10 007 |
+
+The log predates the `precompute.bin` load time / online proving time split (`load_ms`, `prove_ms`), so the
+precomputed row still includes reading `precompute.bin`. It was recorded with spartan-backend commit `d6b2e20`,
+which has the same prover code as `v1.0.0`.
+
+To reproduce the log file, execute in the project root
 
 ```bash
 ./gradlew installDebug
@@ -135,10 +153,10 @@ to load the Android app to the device and run it. You can then execute any desir
 To extract the relevant logs, use
 
 ```bash
-grep -E 'ZKP|noir_spartan' $(date -I).log > zkp.log
+grep -E 'ZKP|noir_spartan' $(date -I).log > benchmarks/<device>/zkp.log
 ```
 
-and can then use the resulting log file for further processing (e.g. `grep -vE  'spartan_backend::precompute|circuit_instance|vega_prover' zkp.log` to get the only logs related to the benchmarks directly).
+and can then use the resulting log file for further processing (e.g. `grep -vE  'spartan_backend::precompute|circuit_instance|vega_prover' benchmarks/<device>/zkp.log` to get the only logs related to the benchmarks directly).
 
 ## License
 

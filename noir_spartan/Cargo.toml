@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 uniffi = { version = "0.31", features = [ "cli" ] }
-spartan-backend = { git = "ssh://git@github.com/eid-privacy/spartan-backend", branch = "benchmark" }
+spartan-backend = { git = "https://github.com/eid-privacy/spartan-backend", tag = "v1.0.0" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
 mimalloc = "0.1"

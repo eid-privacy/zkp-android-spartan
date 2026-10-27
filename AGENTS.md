@@ -2,7 +2,7 @@
 
 ## Project Purpose
 
-`zkp-android-spartan` is an experimental Android application template that demonstrates zero-knowledge proof (ZKP) workflows built with a [Spartan2](https://github.com/microsoft/Spartan)-style proof system through the [Noir](https://noir-lang.org/) language/toolchain. The project consists of:
+`zkp-android-spartan` is an experimental Android application that benchmarks zero-knowledge proof (ZKP) workflows built with a [Spartan2](https://github.com/microsoft/Spartan)-style proof system through the [Noir](https://noir-lang.org/) language/toolchain. The project consists of:
 
 - A standard Android app skeleton (`app/`).
 - A Rust crate (`noir_spartan/`) that exposes ZKP utilities to Android via [UniFFI](https://mozilla.github.io/uniffi-rs/).
@@ -17,6 +17,7 @@ zkp-android-spartan/
 ├── AGENTS.md              # This file
 ├── README.md              # Human-oriented project overview
 ├── LICENSE                # Mozilla Public License 2.0
+├── benchmarks/            # Raw benchmark logs, one directory per device (FairPhone4/zkp.log)
 ├── .gitignore             # Excludes generated Rust targets, jniLibs, UniFFI bindings, local.properties
 ├── .gitmodules            # Defines the spartan-backend Git submodule
 ├── build.gradle.kts       # Root Gradle build file
@@ -47,10 +48,8 @@ zkp-android-spartan/
 │       │   │   ├── arm64-v8a/libnoir_spartan.so
 │       │   │   └── x86_64/libnoir_spartan.so   # only built on x86_64 hosts
 │       │   └── res/                         # Android resources
-│       ├── test/                            # Unit tests
-│       └── androidTest/                     # Instrumented tests
 └── noir_spartan/          # Rust crate exposed to Android
-    ├── Cargo.toml         # Rust package manifest (UniFFI 0.31, spartan-backend git dep over SSH)
+    ├── Cargo.toml         # Rust package manifest (UniFFI 0.31, spartan-backend git dep, tag v1.0.0)
     ├── Cargo.lock         # Resolved dependency graph
     ├── uniffi.toml        # UniFFI binding configuration (Kotlin package / cdylib name)
     ├── src/
@@ -66,7 +65,7 @@ zkp-android-spartan/
 - **Language**: Kotlin 2.2.10, Java 11 source/target compatibility.
 - **UI**: Jetpack Compose with Material3, Compose BOM `2024.09.00`, Compose Foundation Pager, and Kotlin Coroutines.
 - **Native/Rust**: Rust crate (`noir_spartan`) using `edition = "2024"` and UniFFI 0.31 proc-macro exports to generate bindings for Kotlin/Android.
-- **ZKP/Noir**: `noir_spartan` depends on `spartan-backend` from the `eid-privacy/spartan-backend` repository via an **SSH Git URL** (`ssh://git@github.com/eid-privacy/spartan-backend`; the committed `Cargo.lock` resolves it to commit `ffbbd372afd559d7e2c4a7f7ab26f4d87cee79cb`). The vendored copy under `assets/spartan-backend/` is used for circuit assets and standalone backend runs, but it is **not** the dependency source for the `noir_spartan` crate. Developers sometimes switch the dependency to a local path (e.g. `path = "../../spartan-backend/spartan-backend/"`, a sibling clone); treat that as a developer-local override and keep it out of commits.
+- **ZKP/Noir**: `noir_spartan` depends on `spartan-backend` from the `eid-privacy/spartan-backend` repository via the public HTTPS Git URL `https://github.com/eid-privacy/spartan-backend`, tag `v1.0.0` (the committed `Cargo.lock` resolves it to commit `ffa297c1b3eaed20cbe5cb2160e574b97ca4196f`). The vendored copy under `assets/spartan-backend/` is used for circuit assets and standalone backend runs, but it is **not** the dependency source for the `noir_spartan` crate. Developers sometimes switch the dependency to a local path (e.g. `path = "../../spartan-backend/spartan-backend/"`, a sibling clone); treat that as a developer-local override and keep it out of commits.
   The crate exports four UniFFI functions:
   - `precompute_proof(pwd: String) -> String` — loads the Noir circuit directory, runs the offline prep phase, writes the reusable artifacts to `<circuit_dir>/target/precompute.bin`, and returns that file's absolute path (or an empty `String` on failure).
   - `generate_proof(pwd: String) -> String` — loads a Noir circuit directory, produces a Spartan2 proof via `spartan-backend`, encodes it as base64, and returns it (or an empty `String` on failure).
@@ -80,8 +79,6 @@ zkp-android-spartan/
 ### Android
 
 - `./gradlew build` — Build the Android app.
-- `./gradlew test` — Run unit tests.
-- `./gradlew connectedAndroidTest` — Run instrumented tests (requires a connected device or emulator).
 
 > **Note:** The Gradle build does **not** compile the Rust code. It expects the native libraries to already exist under `app/src/main/jniLibs/`. See the `cargo ndk` step below.
 
@@ -126,9 +123,9 @@ See `app/src/main/assets/spartan-backend/preprocessing/README.md` for the tool-t
 
 ## Devbox and Emulator Workflow
 
-The toolchain (Rust, JDK 17, Android platform tools, gcc/cmake) is pinned per-project with **devbox + nix** rather than global installs, via `devbox.json` at the repo root. Every command below runs inside the devbox environment (prefix with `devbox run`, or open a shell with `devbox shell`). The `init_hook` detects the OS and sets `ANDROID_HOME` (`$HOME/Android` on Linux, `$HOME/Library/Android/sdk` on macOS), sets `ANDROID_SDK_ROOT`, `JAVA_HOME`, and `ANDROID_NDK_HOME` (auto-detected from `$ANDROID_HOME/ndk/*`), puts `~/.cargo/bin` on `PATH`, sets `PKG_CONFIG_PATH`, runs `rustup default stable`, and exports `CARGO_NET_GIT_FETCH_WITH_CLI=true` (cargo's built-in libgit2 cannot authenticate to the `ssh://git@github.com` dependencies, so it must shell out to the git CLI).
+The toolchain (Rust, JDK 17, Android platform tools, gcc/cmake) is pinned per-project with **devbox + nix** rather than global installs, via `devbox.json` at the repo root. Every command below runs inside the devbox environment (prefix with `devbox run`, or open a shell with `devbox shell`). The `init_hook` detects the OS and sets `ANDROID_HOME` (`$HOME/Android` on Linux, `$HOME/Library/Android/sdk` on macOS), sets `ANDROID_SDK_ROOT`, `JAVA_HOME`, and `ANDROID_NDK_HOME` (auto-detected from `$ANDROID_HOME/ndk/*`), puts `~/.cargo/bin` on `PATH`, sets `PKG_CONFIG_PATH`, and runs `rustup default stable`. All git dependencies are public HTTPS URLs, so no SSH key is needed.
 
-Prerequisites once per clone: `git submodule update --init` (pulls the `spartan-backend` assets), `devbox run compile_circuits` (generates the circuit `target/` artifacts, which the submodule no longer versions), and `devbox install` (`cargo-ndk` is a devbox package, and the devbox `init_hook` installs the `aarch64-linux-android` and `x86_64-linux-android` Rust targets). Ensure `local.properties` has `sdk.dir=/home/ubuntu/Android` (the complete SDK; `/opt/android` is a stub).
+Prerequisites once per clone: `git submodule update --init` (pulls the `spartan-backend` assets), `devbox run compile_circuits` (generates the circuit `target/` artifacts, which the submodule no longer versions), and `devbox install` (`cargo-ndk` is a devbox package, and the devbox `init_hook` installs the `aarch64-linux-android` and `x86_64-linux-android` Rust targets). Ensure `local.properties` has `sdk.dir=` pointing at a complete Android SDK including an NDK (`~/Android` on Linux, `~/Library/Android/sdk` on macOS, matching `devbox.json`).
 
 Devbox scripts (`devbox run <name>`):
 
@@ -166,7 +163,6 @@ adb exec-out screencap -p > shot.png  # then tap "Generate proof" with: adb shel
 Two host-specific build workarounds:
 
 - **Gradle daemon JVM crash.** `gradle/gradle-daemon-jvm.properties` pins the daemon to Java 21, so Gradle auto-provisions Temurin 21, which SIGSEGV-crashes during R8 dexing on this machine (leaving `hs_err_pid*.log`). Work around it by running the daemon in interpreter mode for the build only: temporarily set `org.gradle.jvmargs=-Xmx4096m -Dfile.encoding=UTF-8 -Xint` in `gradle.properties`, build, then revert. Do not commit `-Xint`.
-- **cargo SSH fetch.** As noted above, `CARGO_NET_GIT_FETCH_WITH_CLI=true` (set by the devbox `env`) is required for the `spartan-backend`/Noir git dependencies to resolve.
 
 ## Important Notes
 
@@ -178,15 +174,15 @@ Two host-specific build workarounds:
 - `noir_spartan` loads circuits with `instantiate_prover_circuit_from_dir` for the three prover calls and `instantiate_verifier_circuit_from_dir` for `verify`, so verification never reads the private witness and proving never reads `verifier_input.json`.
 - `copyCircuitFromAssets` overwrites the asset files but never deletes the circuit directory, so the Rust-produced `target/precompute.bin` (not shipped in assets) survives re-copies and the path returned by `precompute_proof` stays valid.
 - The Android app is a menu-driven Compose screen with vertically scrollable content. A collapsible dropdown **Menu** switches between a **Benchmarks** page and one page per benchmark circuit. Only the circuits listed in `BENCHMARK_CIRCUITS` (`c0200_swiyu_jwt`, `c0202_sicpa_backend_constant`) that actually exist under `assets/spartan-backend/circuits/` are shown — the app no longer surfaces every circuit directory. Each circuit page has **Precompute proof**, **Generate proof (precomputed)**, **Generate proof**, and **Verify proof** buttons; **Generate proof (precomputed)** is enabled only after a successful precomputation, and **Verify proof** only after a proof has been generated.
-- The **Benchmarks** page has two buttons per circuit: *generation + verification* (100 × `generateProof`, then 100 × `verify`) and *precomputed generation + verification* (1 × timed `precomputeProof`, 100 × `generateProofPrecomputed`, 100 × `verify`), reporting Runs/Shortest/Longest/Average per operation. The precomputed benchmark additionally reports *precompute.bin load* and *Online proving* rows, taken from the `PrecomputedProof` returned by Rust; the circuit page shows both times after *Generate proof (precomputed)*. Every call's result is checked; a failure aborts the benchmark with an error status instead of reporting timings of failed runs. `prove_circuit` never reads `precompute.bin`, so the monolithic benchmark is unaffected by a leftover artifact. Timings are per UniFFI call and include circuit loading from disk (and, for the precomputed path, reading `precompute.bin`). The benchmark coroutine is scoped to the Benchmarks pager page, so switching pages cancels it. `MainActivity` declares `android:configChanges` for orientation/screen-size changes, so rotating the device does not recreate the activity: results, status texts and running benchmarks survive rotation (UI state is plain Compose `remember`, not a ViewModel).
+- The **Benchmarks** page has two buttons per circuit: *generation + verification* (5 × `generateProof`, then 5 × `verify`, see `BENCHMARK_ITERATIONS` in `MainActivity.kt`) and *precomputed generation + verification* (1 × timed `precomputeProof`, 5 × `generateProofPrecomputed`, 5 × `verify`), reporting Runs/Shortest/Longest/Average per operation. The precomputed benchmark additionally reports *precompute.bin load* and *Online proving* rows, taken from the `PrecomputedProof` returned by Rust; the circuit page shows both times after *Generate proof (precomputed)*. Every call's result is checked; a failure aborts the benchmark with an error status instead of reporting timings of failed runs. `prove_circuit` never reads `precompute.bin`, so the monolithic benchmark is unaffected by a leftover artifact. Timings are per UniFFI call and include circuit loading from disk (and, for the precomputed path, reading `precompute.bin`). The benchmark coroutine is scoped to the Benchmarks pager page, so switching pages cancels it. `MainActivity` declares `android:configChanges` for orientation/screen-size changes, so rotating the device does not recreate the activity: results, status texts and running benchmarks survive rotation (UI state is plain Compose `remember`, not a ViewModel).
 - Not every directory under `assets/spartan-backend/circuits/` is a standalone provable circuit (e.g. `c9000_benchmark/` has no `target/` artifacts or `Prover.toml`, and `eid/` is a shared Noir library used by `c0200_swiyu_jwt`). This is why the app only surfaces the curated `BENCHMARK_CIRCUITS` list instead of auto-discovering every directory.
 - The prover needs well over 2 GB of RAM. With the emulator's default 2.5 GB, Android's low-memory killer kills the app during proof generation (`lowmemorykiller: Kill 'com.example.zkp_android_spartan' ...`, no Java or native crash). The devbox emulator scripts therefore pass `-memory ${AVD_RAM_MB:-8192}`. Setting `hw.ramSize` in the AVD's `config.ini` does not work: emulator 36.6.11 ignores it and logs `Increasing RAM size to 2560MB`.
 - `noir_spartan` uses `mimalloc` as its global allocator (`src/lib.rs`). On the arm64 emulator this made proof generation ~23% and verification ~30% faster than Android's default Scudo allocator. A `[profile.release]` with `lto = "fat"` and `codegen-units = 1` was also measured and gave no improvement, so it is not used.
 - The vendored `spartan-backend` is a large Rust codebase that pulls in a forked Noir compiler/toolchain; initial builds can be slow.
 - Circuit target artifacts (`circuits/*/target/`) are **not** versioned in the submodule anymore (since submodule commit `040e23c`), even though the submodule README still says otherwise. Without them the app finds no circuits (`CircuitDebug: Number of circuits found: 0`) and the Benchmarks page shows only its title. Run `devbox run compile_circuits` after checking out or updating the submodule, then rebuild and reinstall the APK.
 - `compile_circuits` uses the `nargo-t256` pinned by the submodule's own `devbox.json`. A `devbox run -- bash -c '...'` one-liner loses `$variables` because devbox re-quotes its arguments, which is why the logic lives in a script file.
-- The `noir_spartan` crate depends on `spartan-backend` via an SSH Git URL (`ssh://git@github.com/eid-privacy/spartan-backend`), not via the local submodule path; building `noir_spartan` therefore requires SSH access to the `eid-privacy/spartan-backend` repository. (A developer-local path override may be used — see the Technology Stack section.)
-- The `spartan-backend` submodule is pinned at commit `d6b2e206ee32f16d089a9e080186aadfa3cb01a4` (branch `benchmark`), and the committed `noir_spartan/Cargo.lock` currently resolves the `spartan-backend` git dependency to the same commit. The two are updated independently, so if they drift apart the vendored code under `assets/spartan-backend/` is not guaranteed to match the code linked into the Android library.
+- The `noir_spartan` crate depends on `spartan-backend` via its Git URL, not via the local submodule path. (A developer-local path override may be used — see the Technology Stack section.)
+- The `spartan-backend` submodule is pinned at tag `v1.0.0` (commit `ffa297c1b3eaed20cbe5cb2160e574b97ca4196f`, on `main`), and the committed `noir_spartan/Cargo.lock` resolves the `spartan-backend` git dependency to the same commit. Pin to tags or commits on `main`: feature branches get deleted after merging, which breaks fresh clones. The two are updated independently, so if they drift apart the vendored code under `assets/spartan-backend/` is not guaranteed to match the code linked into the Android library.
 - If you change any `#[uniffi::export]` API (for example, `precompute_proof` was recently changed from `-> bool` to `-> String` and `generate_proof_precomputed` gained an explicit path argument), remember to (1) rebuild `target/release/libnoir_spartan.so`, (2) regenerate the Kotlin bindings, and (3) rebuild the Android `jniLibs/.so` files. The Android Kotlin layer must then be updated to match the new signature (`String` stays `String`; `Vec<u8>` becomes `kotlin.ByteArray`).
 
 ## License
