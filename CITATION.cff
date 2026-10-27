@@ -9,6 +9,7 @@ authors:
   - family-names: Gasser
     given-names: Linus
     affiliation: EPFL
+doi: 10.5281/zenodo.23694719
 repository-code: https://github.com/eid-privacy/zkp-android-spartan
 license: MPL-2.0
 abstract: >-

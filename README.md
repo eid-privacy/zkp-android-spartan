@@ -1,5 +1,7 @@
 # zkp-android-spartan
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23694719.svg)](https://doi.org/10.5281/zenodo.23694719)
+
 An experimental Android app that generates and verifies zero-knowledge proofs (ZKP) on the phone. Circuits are written in [Noir](https://noir-lang.org/) and proved with a [Spartan2](https://github.com/microsoft/Spartan)-style backend ([`eid-privacy/spartan-backend`](https://github.com/eid-privacy/spartan-backend)). The proving code is Rust, and the app calls it from Kotlin through [UniFFI](https://mozilla.github.io/uniffi-rs/).
 
 The main purpose of the app is to **benchmark proof generation and verification on Android** for the eID circuits `c0200_swiyu_jwt` and `c0202_sicpa_backend_constant`. Results are in [Benchmarks](#benchmarks).
@@ -129,6 +131,11 @@ separately. The results appear on the page and in Logcat under the tag `ZKP`:
 ```bash
 devbox run logcat -s ZKP
 ```
+
+## How to cite
+
+Archived on Zenodo: [10.5281/zenodo.23694719](https://doi.org/10.5281/zenodo.23694719) (this DOI always resolves to the latest version).
+GitHub's "Cite this repository" button gives APA and BibTeX, from [CITATION.cff](CITATION.cff).
 
 ## License
 
